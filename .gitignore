@@ -131,6 +131,9 @@ dmypy.json
 # vscode setting
 .vscode/
 
+# pycharm setting
+.idea/
+
 # data
 data/wav/
 data/wav_split/
