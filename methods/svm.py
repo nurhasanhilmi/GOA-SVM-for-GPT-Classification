@@ -23,8 +23,10 @@ class SupportVectorClassifier:
 
         def train(self, X, y):
             n_samples, n_features = np.shape(X)
-            alpha = np.zeros(n_samples)  # initialize alpha array (lagrange multipliers) to all zero
-            gradient = -np.ones(n_samples)  # initialize gradient array to all -1
+            # initialize alpha array (lagrange multipliers) to all zero
+            alpha = np.zeros(n_samples)
+            # initialize gradient array to all -1
+            gradient = -np.ones(n_samples)
             epsilon = 1e-3  # stopping tolerance
             tau = 1e-12
 
@@ -62,7 +64,8 @@ class SupportVectorClassifier:
                         if -y[t] * gradient[t] <= min_gradient:
                             min_gradient = -y[t] * gradient[t]
                         if b > 0:
-                            a = q_matrix[i, i] + q_matrix[t, t] - 2 * y[i] * y[t] * q_matrix[i, t]
+                            a = q_matrix[i, i] + q_matrix[t, t] - \
+                                2 * y[i] * y[t] * q_matrix[i, t]
                             if a <= 0:
                                 a = tau
                             if -(b * b) / a <= obj_min:
@@ -79,7 +82,8 @@ class SupportVectorClassifier:
                     break
 
                 # working set is (i, j)
-                a = q_matrix[i, i] + q_matrix[j, j] - 2 * y[i] * y[j] * q_matrix[i, j]
+                a = q_matrix[i, i] + q_matrix[j, j] - \
+                    2 * y[i] * y[j] * q_matrix[i, j]
                 if a <= 0:
                     a = tau
                 b = -y[i] * gradient[i] + y[j] * gradient[j]
@@ -109,7 +113,8 @@ class SupportVectorClassifier:
                 delta_alpha_i = alpha[i] - old_alpha_i
                 delta_alpha_j = alpha[j] - old_alpha_j
                 for t in range(n_samples):
-                    gradient[t] += q_matrix[t, i] * delta_alpha_i + q_matrix[t, j] * delta_alpha_j
+                    gradient[t] += q_matrix[t, i] * delta_alpha_i + \
+                        q_matrix[t, j] * delta_alpha_j
 
             def calculate_intercept():
                 num_free = 0
@@ -147,7 +152,8 @@ class SupportVectorClassifier:
             result = np.zeros(np.shape(X)[0])
             for i, sample in enumerate(X):
                 for j in range(len(self.support_vectors_)):
-                    result[i] += self.dual_coef_[j] * self.kernel(self.support_vectors_[j], sample)
+                    result[i] += self.dual_coef_[j] * \
+                        self.kernel(self.support_vectors_[j], sample)
             result += self.intercept_
             return result
 
@@ -185,11 +191,14 @@ class SupportVectorClassifier:
                 start_time = time.time()
                 if self.verbose:
                     print(idx + 1)
-                    print(f'Start training for \t{np.array(self.labels[[i, j]])}\t{len(target[target == -1])}\t{len(target[target == 1])}')
-                self.classifiers.append(self.BaseSVM(C=self.C, gamma=self.gamma))
+                    print(
+                        f'Start training for \t{np.array(self.labels[[i, j]])}\t{len(target[target == -1])}\t{len(target[target == 1])}')
+                self.classifiers.append(
+                    self.BaseSVM(C=self.C, gamma=self.gamma))
                 self.classifiers[idx].train(sample, target)
                 if self.verbose:
-                    print(f'Finish training for \t{self.target_labels[idx]}\t{time.time() - start_time} seconds')
+                    print(
+                        f'Finish training for \t{self.target_labels[idx]}\t{time.time() - start_time} seconds')
                 idx += 1
         self.target_labels = np.array(self.target_labels)
 

@@ -18,7 +18,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.svm import SVC
 
 
-class Goa_Svm:
+class GOA_SVM:
     """
     The original version of: Grasshopper Optimization Algorithm (GOA)
         (Grasshopper Optimisation Algorithm: Theory and Application Advances in Engineering Software)
@@ -89,19 +89,21 @@ class Goa_Svm:
         kf = KFold(n_splits=3, shuffle=True, random_state=0)
         X = self.samples
         y = self.targets
-        print(f'  Grasshopper-{self.iteration+1} Get fitness with pos: {position}')
+        print(
+            f'  Grasshopper-{self.iteration+1} Get fitness with pos: {position}')
         scores = []
         for i, (train_index, test_index) in enumerate(kf.split(X)):
 
             X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-            y_train, y_test = y[train_index], y[test_index]
-            
+            y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+
             scaler = MinMaxScaler(feature_range=(-1, 1))
             scaler.fit(X_train)
             X_train = scaler.transform(X_train)
             X_test = scaler.transform(X_test)
-            
-            clf = SVC(kernel='rbf', decision_function_shape='ovo', C=position[0], gamma=position[1])
+
+            clf = SVC(kernel='rbf', decision_function_shape='ovo',
+                      C=position[0], gamma=position[1])
             clf.fit(X_train, y_train)
             y_pred = clf.predict(X_test)
 
@@ -110,7 +112,7 @@ class Goa_Svm:
             print(f'\tTrain & Test split-{i+1} : {acc}')
         mean_acc = mean(scores)
         print(f'\tMean Acc: {mean_acc}')
-        self.iteration+=1
+        self.iteration += 1
         return mean_acc
 
     def get_global_best_solution(self, pop=None, id_fit=None, id_best=None):
@@ -154,21 +156,26 @@ class Goa_Svm:
         print('Generation : 0 (Initialization)')
         pop = [self.create_solution() for _ in range(self.pop_size)]
         # pop = self.manual_create_solution()
-        g_best = self.get_global_best_solution(pop=pop, id_fit=self.ID_FIT, id_best=self.ID_MAX_PROB)
-        print("> Epoch: Init, Best fit: {}, Best pos: {}".format(g_best[self.ID_FIT], g_best[self.ID_POS]))
+        g_best = self.get_global_best_solution(
+            pop=pop, id_fit=self.ID_FIT, id_best=self.ID_MAX_PROB)
+        print("> Epoch: Init, Best fit: {}, Best pos: {}".format(
+            g_best[self.ID_FIT], g_best[self.ID_POS]))
         self.iteration = 0
 
         for epoch in range(self.epoch):
             print('Generation :', epoch+1)
             # Eq.(2.8) in the paper
-            c = self.c_minmax[1] - epoch * ((self.c_minmax[1] - self.c_minmax[0]) / self.epoch)
+            c = self.c_minmax[1] - epoch * \
+                ((self.c_minmax[1] - self.c_minmax[0]) / self.epoch)
             for i in range(0, self.pop_size):
                 s_i_total = zeros(self.problem_size)
                 for j in range(0, self.pop_size):
-                    dist = sqrt(sum((pop[i][self.ID_POS] - pop[j][self.ID_POS])**2))
+                    dist = sqrt(
+                        sum((pop[i][self.ID_POS] - pop[j][self.ID_POS])**2))
 
                     # xj - xi / dij in Eq.(2.7)
-                    r_ij_vector = (pop[i][self.ID_POS] - pop[j][self.ID_POS]) / (dist + self.EPSILON)
+                    r_ij_vector = (pop[i][self.ID_POS] - pop[j]
+                                   [self.ID_POS]) / (dist + self.EPSILON)
 
                     # |xjd - xid| in Eq. (2.7)
                     xj_xi = 2 + remainder(dist, 2)
@@ -178,17 +185,20 @@ class Goa_Svm:
                     s_ij = ran * self._s_function__(xj_xi) * r_ij_vector
                     s_i_total += s_ij
 
-                x_new = c * normal() * s_i_total + g_best[self.ID_POS]     # Eq. (2.7) in the paper
+                # Eq. (2.7) in the paper
+                x_new = c * normal() * s_i_total + g_best[self.ID_POS]
                 x_new = self.amend_position(x_new)
                 fit = self.get_fitness_position(x_new)
                 pop[i] = [x_new, fit]
 
                 if (i + 1) % self.pop_size == 0:
-                    g_best = self.update_global_best_solution(pop, self.ID_MAX_PROB, g_best)
+                    g_best = self.update_global_best_solution(
+                        pop, self.ID_MAX_PROB, g_best)
 
             self.loss_train.append(g_best[self.ID_FIT])
             if self.verbose:
-                print("> Epoch: {}, Best fit: {}, Best pos: {}".format(epoch + 1, g_best[self.ID_FIT], g_best[self.ID_POS]))
+                print("> Epoch: {}, Best fit: {}, Best pos: {}".format(
+                    epoch + 1, g_best[self.ID_FIT], g_best[self.ID_POS]))
             self.iteration = 0
         self.solution = g_best
         return g_best[self.ID_POS], g_best[self.ID_FIT], self.loss_train
