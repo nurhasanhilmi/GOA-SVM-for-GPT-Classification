@@ -5,9 +5,10 @@
 #       Homepage:   https://www.researchgate.net/profile/Thieu_Nguyen6                                  %
 #       Github:     https://github.com/thieu1995                                                        %
 #                                                                                                       %
-# Modified by "Ahmad Nurhasan Hilmi" at 02/04/2021 for maximization problem only.
+# Modified by "Ahmad Nurhasan Hilmi" at 02/04/2021                                                      %
 # ------------------------------------------------------------------------------------------------------%
 
+import pandas as pd
 from numpy import exp, zeros, remainder, clip, sqrt, sum, array, mean
 from numpy.random import uniform, normal
 from copy import deepcopy
@@ -39,9 +40,10 @@ class GOA_SVM:
 
     iteration = 0
 
-    def __init__(self, lb=None, ub=None, verbose=True, epoch=750, pop_size=100, c_minmax=(0.00004, 1)):
+    def __init__(self, k_fold=3, lb=None, ub=None, verbose=True, epoch=750, pop_size=100, c_minmax=(0.00004, 1)):
+        self.k_fold = k_fold
+
         self.verbose = verbose
-        # self.obj_func = obj_func
         self.__check_parameters__(lb, ub)
 
         self.epoch = epoch
@@ -51,6 +53,8 @@ class GOA_SVM:
         self.samples, self.targets = None, None
 
         self.solution, self.loss_train = None, []
+
+        self.movement = []
 
     def __check_parameters__(self, lb, ub):
         if (lb is None) or (ub is None):
@@ -80,17 +84,20 @@ class GOA_SVM:
         fitness = self.get_fitness_position(position=position)
         return [position, fitness]
 
-    def get_fitness_position(self, position=None):
+    def get_fitness_position(self, position=None, generation=0):
         """     Assumption that objective function always return the original value
         :param position: 1-D numpy array
         :return:
         """
 
-        kf = KFold(n_splits=3, shuffle=True, random_state=0)
+        kf = KFold(n_splits=self.k_fold, shuffle=True, random_state=42)
         X = self.samples
         y = self.targets
-        print(
-            f'  Grasshopper-{self.iteration+1} Get fitness with pos: {position}')
+
+        if self.verbose:
+            print(
+                f'  Grasshopper-{self.iteration+1} Get fitness with pos: {position}')
+
         scores = []
         for i, (train_index, test_index) in enumerate(kf.split(X)):
 
@@ -109,9 +116,13 @@ class GOA_SVM:
 
             acc = accuracy_score(y_test, y_pred)
             scores.append(acc)
-            print(f'\tTrain & Test split-{i+1} : {acc}')
+            if self.verbose:
+                print(f'\tFold-{i+1} : {acc}')
         mean_acc = mean(scores)
-        print(f'\tMean Acc: {mean_acc}')
+        if self.verbose:
+            print(f'\tMean Acc: {mean_acc}')
+        self.movement.append(
+            [generation, self.iteration+1, position[0], position[1], mean_acc])
         self.iteration += 1
         return mean_acc
 
@@ -137,33 +148,38 @@ class GOA_SVM:
         l = 1.5
         return f * exp(-r_vector / l) - exp(-r_vector)
 
-    def manual_create_solution(self):
-        result = []
-        C = [1, 10, 100, 1000, 10000]
-        gamma = [0.1, 0.01, 0.001, 0.0001, 0.00001, 0.000001]
+    # def manual_create_solution(self):
+    #     result = []
+    #     C = [1, 10, 100, 1000, 10000]
+    #     gamma = [0.1, 0.01, 0.001, 0.0001, 0.00001, 0.000001]
 
-        for i in gamma:
-            for j in C:
-                position = [i, j]
-                fitness = self.get_fitness_position(position=position)
-                result.append([array(position), fitness])
-        return result
+    #     for i in gamma:
+    #         for j in C:
+    #             position = [i, j]
+    #             fitness = self.get_fitness_position(position=position)
+    #             result.append([array(position), fitness])
+    #     return result
 
     def train(self, X, y):
         self.samples = X
         self.targets = y
 
-        print('Generation : 0 (Initialization)')
+        if self.verbose:
+            print('Generation : 0 (Initialization)')
         pop = [self.create_solution() for _ in range(self.pop_size)]
         # pop = self.manual_create_solution()
         g_best = self.get_global_best_solution(
             pop=pop, id_fit=self.ID_FIT, id_best=self.ID_MAX_PROB)
-        print("> Epoch: Init, Best fit: {}, Best pos: {}".format(
-            g_best[self.ID_FIT], g_best[self.ID_POS]))
+
+        if self.verbose:
+            print("> Epoch: Init, Best fit: {}, Best pos: {}".format(
+                g_best[self.ID_FIT], g_best[self.ID_POS]))
         self.iteration = 0
 
         for epoch in range(self.epoch):
-            print('Generation :', epoch+1)
+            if self.verbose:
+                print('Generation :', epoch+1)
+
             # Eq.(2.8) in the paper
             c = self.c_minmax[1] - epoch * \
                 ((self.c_minmax[1] - self.c_minmax[0]) / self.epoch)
@@ -188,7 +204,7 @@ class GOA_SVM:
                 # Eq. (2.7) in the paper
                 x_new = c * normal() * s_i_total + g_best[self.ID_POS]
                 x_new = self.amend_position(x_new)
-                fit = self.get_fitness_position(x_new)
+                fit = self.get_fitness_position(x_new, generation=epoch+1)
                 pop[i] = [x_new, fit]
 
                 if (i + 1) % self.pop_size == 0:
@@ -201,4 +217,34 @@ class GOA_SVM:
                     epoch + 1, g_best[self.ID_FIT], g_best[self.ID_POS]))
             self.iteration = 0
         self.solution = g_best
+        self.__fit()
         return g_best[self.ID_POS], g_best[self.ID_FIT], self.loss_train
+
+    def __fit(self):
+        param = self.solution[self.ID_POS]
+
+        self.model = SVC(kernel='rbf', decision_function_shape='ovo',
+                         C=param[0], gamma=param[1])
+
+        self.min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
+        self.min_max_scaler.fit(self.samples)
+        X_train = self.min_max_scaler.transform(self.samples)
+
+        self.model.fit(X_train, self.targets)
+
+    def predict(self, X_test, y_test=None):
+        X = self.min_max_scaler.transform(X_test)
+        y_pred = self.model.predict(X)
+
+        if y_test is not None:
+            self.test_samples = pd.DataFrame(X_test)
+            self.test_samples['target'] = y_test.tolist()
+            self.test_samples['prediction'] = y_pred.tolist()
+
+        return y_pred
+
+    def save_movement_to_csv(self, filename='movements'):
+        columns = ['generation', 'grasshopper', 'C', 'gamma', 'fitness']
+        df = pd.DataFrame(self.movement, columns=columns)
+        name = './data/misc/'+filename+'.csv'
+        df.to_csv(name, index=False)
