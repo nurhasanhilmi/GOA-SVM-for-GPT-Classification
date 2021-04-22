@@ -13,7 +13,7 @@ def app():
         'The Guitar Playing Technique (GPT) dataset from the work of [Su et al. (2014)](http://mac.citi.sinica.edu.tw/GuitarTranscription/) was utilized.')
 
     st.header("Number of Sound Clips in GPT Dataset")
-    st.write('This dataset comprises 7 playing techniques of the electrical guitar. ***(Total:',
+    st.write('This dataset comprises 7 playing techniques of the electrical guitar with 7 different guitar tones. ***(Total:',
              gpt.shape[0], ' samples)***.')
     st.bar_chart(pd.value_counts(gpt['technique']))
 

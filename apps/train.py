@@ -45,8 +45,8 @@ def app():
                                 0.01, 0.5, (1e-02, 0.1), 1e-02)
         c_min = st.number_input('c_min :', 1e-05, 1.0,
                                 1e-05, step=1e-05, format="%.5f")
-        verbose = st.checkbox('Show backend output', value=True)
-        save = st.checkbox('Save the model for future testing')
+        verbose = st.checkbox('Show backend output.', value=True)
+        save = st.checkbox('Save the model for analysis.')
         if save:
             filename = st.text_input(
                 'Filename:', help='Use _ for word divider.')

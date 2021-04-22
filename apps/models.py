@@ -72,8 +72,8 @@ def app():
 
         st.header('Test Samples + Prediction')
         st.write(model.test_samples.shape[0], 'samples')
-        st.dataframe(model.test_samples.sample(frac=0.01, random_state=0))
-        st.write('Table above showing 1% of data.')
+        st.dataframe(model.test_samples.sample(frac=0.05, random_state=0))
+        st.write('Table above showing 5% of data.')
 
         st.header('Confusion Matrix')
         fig = plt.figure()
