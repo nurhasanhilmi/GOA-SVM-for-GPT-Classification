@@ -1,30 +1,9 @@
-# ------------------------------------------------------------------------------------------------------%
-# Created by "Thieu Nguyen" at 14:53, 17/03/2020                                                        %
-#                                                                                                       %
-#       Email:      nguyenthieu2102@gmail.com                                                           %
-#       Homepage:   https://www.researchgate.net/profile/Thieu_Nguyen6                                  %
-#       Github:     https://github.com/thieu1995                                                        %
-#                                                                                                       %
-# Modified by "Ahmad Nurhasan Hilmi" at 02/04/2021 for maximization problem only.
-# ------------------------------------------------------------------------------------------------------%
-
 from numpy import exp, zeros, remainder, clip, sqrt, sum, array
 from numpy.random import uniform, normal
 from copy import deepcopy
 
 
 class BaseGOA:
-    """
-    The original version of: Grasshopper Optimization Algorithm (GOA)
-        (Grasshopper Optimisation Algorithm: Theory and Application Advances in Engineering Software)
-    Link:
-        http://dx.doi.org/10.1016/j.advengsoft.2017.01.004
-        https://www.mathworks.com/matlabcentral/fileexchange/61421-grasshopper-optimisation-algorithm-goa
-    Notes:
-        + I added normal() component to Eq, 2.7
-        + Changed the way to calculate distance between two location
-        + Used batch-size idea
-    """
     ID_MAX_PROB = -1  # max problem
 
     ID_POS = 0  # Position
@@ -32,7 +11,7 @@ class BaseGOA:
 
     EPSILON = 10E-10
 
-    def __init__(self, obj_func=None, lb=None, ub=None, verbose=True, epoch=750, pop_size=100, c_minmax=(0.00004, 1)):
+    def __init__(self, obj_func=None, lb=None, ub=None, verbose=True, epoch=100, pop_size=50, c_minmax=(0.00004, 1)):
         self.verbose = verbose
         self.obj_func = obj_func
         self.__check_parameters__(lb, ub)

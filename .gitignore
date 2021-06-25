@@ -138,4 +138,6 @@ dmypy.json
 data/wav/
 data/misc/
 data/wav_split/
+data/wav_split_sample/
 data/guitar.rar
+notebooks/csv/
