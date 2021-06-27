@@ -17,10 +17,10 @@ def app():
     list_file = [filename[:-4] for filename in list_file]
     list_file.sort()
     filename = st.selectbox('Select Model:', list(dict.fromkeys(list_file)))
-    used_dataset = filename.split('_')[0]
-    optimizer = filename.split('_')[1]
 
     if filename:
+        used_dataset = filename.split('_')[0]
+        optimizer = filename.split('_')[1]
         movement = pd.read_csv(path+filename+'.csv')
         model = open(path+filename+'.sav', 'rb')
         model = pickle.load(model)
@@ -40,13 +40,15 @@ def app():
                 model_parameter = pd.DataFrame(
                     [k_fold, pop_size, epoch, c_minmax, c_range, gamma_range],
                     index=['K-Fold', 'Pop. Size', 'Maximum Iteration',
-                        'c minmax', 'C Range', 'Gamma Range'],
+                           'c minmax', 'C Range', 'Gamma Range'],
                     columns=['Value']
                 )
             elif optimizer == 'GridSearchSVM':
                 model_parameter = pd.DataFrame(
-                    [k_fold , f'[{c_range[0]},...,{c_range[1]}]', f'[{gamma_range[0]},...,{gamma_range[1]}]'],
-                    index=['K-Fold', 'C Set (Exp. of 2)', 'Gamma Set (Exp. of 2)'],
+                    [k_fold, f'[{c_range[0]},...,{c_range[1]}]',
+                        f'[{gamma_range[0]},...,{gamma_range[1]}]'],
+                    index=['K-Fold', 'C Set (Exp. of 2)',
+                           'Gamma Set (Exp. of 2)'],
                     columns=['Value']
                 )
             st.table(model_parameter)

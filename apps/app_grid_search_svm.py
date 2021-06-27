@@ -25,7 +25,7 @@ class GridSearchSVM:
         self.min_max_scaler = min_max_scaler
         self.lb = lb
         self.ub = ub
-        
+
 
 def app():
     st.title('Grid Search-SVM')
@@ -33,12 +33,14 @@ def app():
     st.header('Dataset Setting')
     col1, col2, col3 = st.beta_columns(3)
     with col1:
-        selected_dataset = st.selectbox('Select Dataset:', ['GPT Complete', 'GPT Split'])
+        selected_dataset = st.selectbox(
+            'Select Dataset:', ['GPT Complete', 'GPT Split'])
     with col2:
         train_size = st.number_input('Train Size (%):', 10, 90, 80, step=5)
     with col3:
-        sampling_size = st.number_input('Sampling Size (%):', 5, 100, 100, step=5)
-    
+        sampling_size = st.number_input(
+            'Sampling Size (%):', 5, 100, 100, step=5)
+
     train_size = train_size/100
     sampling_size = sampling_size/100
 
@@ -61,10 +63,11 @@ def app():
                  'Num. Test Samples', 'Total Samples']
     )
     st.table(dataset_summarize.assign(hack='').set_index('hack'))
-    
+
     st.header('Paremeter Setting')
     range_C = st.slider("C Set (Exponents of 2):", 0, 15, (0, 15), 1)
-    range_gamma = st.slider("Gamma Set (Exponents of 2) :", -15, 0, (-15, -0), 1)
+    range_gamma = st.slider(
+        "Gamma Set (Exponents of 2) :", -15, 0, (-15, -0), 1)
 
     lb = (range_C[0], range_gamma[0])
     ub = (range_C[1], range_gamma[1])
@@ -75,11 +78,11 @@ def app():
     for c in range(int(range_C[0]), int(range_C[1]+1)):
         C.append(2**c)
         # C_header.append(f'2^{c}')
-    
+
     for g in range(int(range_gamma[0]), int(range_gamma[1])+1):
         gamma.append(2**g)
         # gamma_header.append(f'2^{g}')
-    
+
     # C_df = pd.DataFrame(C)
     # C_df = C_df.transpose()
     # C_df.columns = C_header
@@ -110,11 +113,12 @@ def app():
         best_score = 0
         best_gamma = None
         best_C = None
-        pop = np.zeros((len(C)*len(gamma),3))
+        pop = np.zeros((len(C)*len(gamma), 3))
         iter_progress = 0
         for i, c in enumerate(C):
             for j, g in enumerate(gamma):
-                if verbose: print(f'C: {c}, Gamma: {g}')
+                if verbose:
+                    print(f'C: {c}, Gamma: {g}')
                 scores = []
                 for k, (train_index, test_index) in enumerate(kf.split(X)):
 
@@ -126,37 +130,42 @@ def app():
                     X_trn = scaler.transform(X_trn)
                     X_tst = scaler.transform(X_tst)
 
-                    clf = SVC(kernel='rbf', decision_function_shape='ovo', C=c, gamma=g)
+                    clf = SVC(kernel='rbf',
+                              decision_function_shape='ovo', C=c, gamma=g)
                     clf.fit(X_trn, y_trn)
                     y_pred = clf.predict(X_tst)
 
                     acc = accuracy_score(y_tst, y_pred)
                     scores.append(acc)
-                    if verbose: print(f'\tFold-{k+1} : {acc}')
+                    if verbose:
+                        print(f'\tFold-{k+1} : {acc}')
                 mean_acc = np.mean(scores)
                 pop[iter_progress] = [c, g, mean_acc]
                 if mean_acc > best_score:
                     best_score = mean_acc
                     best_gamma = g
                     best_C = c
-                if verbose: print('\tMean acc:', mean_acc)
+                if verbose:
+                    print('\tMean acc:', mean_acc)
                 iter_progress += 1
                 bar_progress.progress(iter_progress/(len(C)*len(gamma)))
-        
+
         scaler = MinMaxScaler(feature_range=(-1, 1))
         scaler.fit(X_train)
         X_train_ = scaler.transform(X_train)
         X_test_ = scaler.transform(X_test)
-        clf = SVC(kernel='rbf', decision_function_shape='ovo', C=best_C, gamma=best_gamma)
+        clf = SVC(kernel='rbf', decision_function_shape='ovo',
+                  C=best_C, gamma=best_gamma)
         clf.fit(X_train_, y_train)
 
-        print(f'Best Parameter (C, Gamma) : ({best_C}, {best_gamma}). Fitness: {best_score}')
+        print(
+            f'Best Parameter (C, Gamma) : ({best_C}, {best_gamma}). Fitness: {best_score}')
 
         st.write('***Best Solution :***')
         model_solution = pd.DataFrame(
             [best_C, best_gamma, "{0:.2%}".format(best_score)],
             index=['Best Param C', 'Best Param Gamma',
-                    'Fitness'],
+                   'Fitness'],
             columns=['Value']
         )
         st.table(model_solution)
@@ -187,7 +196,9 @@ def app():
 
             best_param = [best_C, best_gamma]
             solution = [best_param, best_score]
-            md = GridSearchSVM(solution, k_fold, X_train, X_test, y_train, y_test, y_pred, clf, scaler, lb, ub)
+            md = GridSearchSVM(solution, k_fold, X_train, X_test,
+                               y_train, y_test, y_pred, clf, scaler, lb, ub)
             name = './data/misc/'+filename+'.sav'
             pickle.dump(md, open(name, 'wb'))
-            st.markdown('<span style="color:blue">*The model has been saved.*</span>', True)
+            st.markdown(
+                '<span style="color:blue">*The model has been saved.*</span>', True)

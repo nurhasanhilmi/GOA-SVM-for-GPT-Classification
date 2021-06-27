@@ -146,13 +146,16 @@ class GOA_SVM:
                     if i != j:
                         # Calculate the distance between two grasshoppers
                         # dist = np.sqrt(sum((pop[j][self.ID_POS] - pop[i][self.ID_POS])**2))
-                        dist = np.linalg.norm(pop[j][self.ID_POS] - pop[i][self.ID_POS])
+                        dist = np.linalg.norm(
+                            pop[j][self.ID_POS] - pop[i][self.ID_POS])
                         # xj-xi/dij in Eq. (2.7)
-                        r_ij = (pop[j][self.ID_POS] - pop[i][self.ID_POS]) / (dist + self.EPSILON)
+                        r_ij = (pop[j][self.ID_POS] - pop[i]
+                                [self.ID_POS]) / (dist + self.EPSILON)
                         # |xjd - xid| in Eq. (2.7)
                         xj_xi = 2 + np.remainder(dist, 2)
                         # The first part inside the big bracket in Eq. (2.7)
-                        s_ij = ((self.ub - self.lb)*c/2) * self._S_func(xj_xi) * r_ij
+                        s_ij = ((self.ub - self.lb)*c/2) * \
+                            self._S_func(xj_xi) * r_ij
                         s_i_total += s_ij
                 # Eq. (2.7) in the paper
                 x_new = c * s_i_total + g_best[self.ID_POS]
