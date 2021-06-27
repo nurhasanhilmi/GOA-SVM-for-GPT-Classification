@@ -1,3 +1,10 @@
+# ------------------------------------------------------------------------------------------------------%
+# Created by "Ahmad Nurhasan Hilmi" at 14:53, 17/03/2021                                                %
+#                                                                                                       %
+#       Email:      nurhasanhilmi@gmail.com                                                             %
+#       Github:     https://github.com/nurhasanhilmi                                                    %
+# -------------------------------------------------------------------------------------------------------%
+
 import numpy as np
 from pandas import factorize
 import time
@@ -10,8 +17,27 @@ def rbf_kernel(gamma):
     return f
 
 
-class SupportVectorClassifier:
-    class BaseSVM:
+class SVM:
+    """Support Vector Machine with Radial Basis Function Kernel
+
+    The implementation is based on SMO-type algorithm proposed in this paper: https://www.csie.ntu.edu.tw/~cjlin/papers/quadworkset.pdf
+
+    The multiclass support is handled according to a one-vs-one scheme.
+
+    Parameters
+    ----------
+    C : float, default=1.0
+        Regularization parameter. The strength of the regularization is
+        inversely proportional to C. Must be strictly positive.
+
+    gamma : float, default=None
+        Kernel coefficient for RBF.
+        - if ``None`` is passed then it uses 1 / (n_features * X.var()) as value of gamma
+
+    verbose : bool, default=False
+        Show the verbosity.
+    """
+    class BinarySVM:
         def __init__(self, C=1.0, gamma=None):
             self.C = C
             self.gamma = gamma
@@ -23,8 +49,7 @@ class SupportVectorClassifier:
 
         def train(self, X, y):
             n_samples, n_features = np.shape(X)
-            # initialize alpha array (lagrange multipliers) to all zero
-            alpha = np.zeros(n_samples)
+            alpha = np.zeros(n_samples)  # initialize alpha array to all zero
             # initialize gradient array to all -1
             gradient = -np.ones(n_samples)
             epsilon = 1e-3  # stopping tolerance
@@ -34,7 +59,7 @@ class SupportVectorClassifier:
             if not self.gamma:
                 self.gamma = 1 / (n_features * np.var(X))
 
-            # initialize rbf kernel method with parameter gamma
+            # initialize rbf kernel function with param gamma
             self.kernel = self.kernel(gamma=self.gamma)
 
             kernel_matrix = np.zeros((n_samples, n_samples))
@@ -57,7 +82,7 @@ class SupportVectorClassifier:
 
                 # select j
                 j = -1
-                obj_min = float('inf')  # minimal value objective function
+                obj_min = float('inf')
                 for t in range(n_samples):
                     if (y[t] == +1 and alpha[t] > 0) or (y[t] == -1 and alpha[t] < self.C):
                         b = max_gradient + y[t] * gradient[t]
@@ -170,10 +195,10 @@ class SupportVectorClassifier:
 
         self.verbose = verbose
 
-        # self.support_ = None
-        # self.support_vectors_ = None
-        # self.dual_coef_ = None
-        # self.intercept_ = None
+        self.support_ = []
+        self.support_vectors_ = []
+        self.dual_coef_ = []
+        self.intercept_ = []
 
     def fit(self, X, y):
         y, self.labels = factorize(y)
@@ -190,15 +215,23 @@ class SupportVectorClassifier:
 
                 start_time = time.time()
                 if self.verbose:
-                    print(idx + 1)
-                    print(
-                        f'Start training for \t{np.array(self.labels[[i, j]])}\t{len(target[target == -1])}\t{len(target[target == 1])}')
+                    print(f'Binary SVM-{idx + 1}')
+                    print('\tStart training for \t{}\t[-1: {} samples]\t[+1: {} samples]'.format(
+                        np.array(self.labels[[i, j]]),
+                        len(target[target == -1]),
+                        len(target[target == 1])
+                    ))
                 self.classifiers.append(
-                    self.BaseSVM(C=self.C, gamma=self.gamma))
+                    self.BinarySVM(C=self.C, gamma=self.gamma))
                 self.classifiers[idx].train(sample, target)
+
+                self.support_.append(self.classifiers[idx].support_)
+                self.support_vectors_.append(self.classifiers[idx].support_vectors_)
+                self.dual_coef_.append(self.classifiers[idx].dual_coef_)
+                self.intercept_.append(self.classifiers[idx].intercept_)
+
                 if self.verbose:
-                    print(
-                        f'Finish training for \t{self.target_labels[idx]}\t{time.time() - start_time} seconds')
+                    print('\tFinished in \t{} seconds'.format(time.time() - start_time))
                 idx += 1
         self.target_labels = np.array(self.target_labels)
 

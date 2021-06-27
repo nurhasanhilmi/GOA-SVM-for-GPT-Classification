@@ -130,8 +130,8 @@ class GOA_SVM:
 
         if self.verbose:
             print('Generation : 0 (Initialization)')
-        pop = [self.create_solution() for _ in range(self.pop_size)]
-        # pop = self.manual_create_solution()
+        # pop = [self.create_solution() for _ in range(self.pop_size)]
+        pop = self.manual_create_solution()
         g_best = self.get_global_best_solution(pop=pop, id_fit=self.ID_FIT, id_best=self.ID_MAX_PROB)
 
         if self.verbose:

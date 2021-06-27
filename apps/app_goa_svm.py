@@ -30,7 +30,7 @@ class GOA_SVM:
         self.pop_size = pop_size
         self.c_minmax = c_minmax
         self.samples, self.targets = None, None
-        self.solution, self.loss_train = None, []
+        self.solution = None
         self.movement = []
 
     def __check_parameters__(self, lb, ub):
@@ -54,18 +54,19 @@ class GOA_SVM:
                 print("Lower bound and Upper bound need to be a list.")
                 exit(0)
 
-    def create_solution(self):
+    def init_solution(self):
         position = np.random.uniform(self.lb, self.ub)
         fitness = self.get_fitness_position(position=position)
         return [position, fitness]
 
-    def get_fitness_position(self, position=None, generation=0):
+    def get_fitness_position(self, position=None, generation=1):
         kf = KFold(n_splits=self.k_fold, shuffle=True, random_state=42)
         X = self.samples
         y = self.targets
 
         if self.verbose:
-            print(f'  Grasshopper-{self.iteration+1} Get fitness with pos: {position}')
+            print(
+                f'  Grasshopper-{self.iteration+1} Get fitness with pos: {position}')
 
         scores = []
         for i, (train_index, test_index) in enumerate(kf.split(X)):
@@ -90,7 +91,8 @@ class GOA_SVM:
         mean_acc = np.mean(scores)
         if self.verbose:
             print(f'\tMean Acc: {mean_acc}')
-        self.movement.append([generation, self.iteration+1, position[0], position[1], mean_acc])
+        self.movement.append(
+            [generation, self.iteration+1, position[0], position[1], mean_acc])
         self.iteration += 1
         return mean_acc
 
@@ -106,68 +108,82 @@ class GOA_SVM:
     def amend_position(self, position=None):
         return np.clip(position, self.lb, self.ub)
 
-    def _s_function__(self, r_vector=None):
+    def _S_func(self, r=None):
         # Eq.(2.3) in the paper
         f = 0.5
         l = 1.5
-        return f * np.exp(-r_vector / l) - np.exp(-r_vector)
+        return f * np.exp(-r / l) - np.exp(-r)
 
     def train(self, X, y, progress):
         self.samples = X
         self.targets = y
-        if self.verbose: print('Generation : 0 (Initialization)')
+        if self.verbose:
+            print('GENERATION : 1 (Initialization)')
 
-        pop = [self.create_solution() for _ in range(self.pop_size)]
-        g_best = self.get_global_best_solution(pop=pop, id_fit=self.ID_FIT, id_best=self.ID_MAX_PROB)
+        pop = [self.init_solution() for _ in range(self.pop_size)]
+        g_best = self.get_global_best_solution(
+            pop=pop, id_fit=self.ID_FIT, id_best=self.ID_MAX_PROB)
 
         if self.verbose:
-            print("> Epoch: Init, Best fit: {}, Best pos: {}".format(g_best[self.ID_FIT], g_best[self.ID_POS]))
+            print("> GENERATION: 1 (Initialization), Best fit: {}, Best pos: {}".format(
+                g_best[self.ID_FIT], g_best[self.ID_POS]))
         self.iteration = 0
 
-        for epoch in range(1, self.epoch+1):
-            if self.verbose: print('Generation :', epoch)
+        for epoch in range(2, self.epoch+1):
+            if self.verbose:
+                print('GENERATION :', epoch)
 
             # UPDATE COEFFICIENT c
-            c = self.c_minmax[1] - epoch * ((self.c_minmax[1] - self.c_minmax[0]) / self.epoch)  # Eq.(2.8) in the paper
-            
+            # Eq.(2.8) in the paper
+            c = self.c_minmax[1] - epoch * \
+                ((self.c_minmax[1] - self.c_minmax[0]) / self.epoch)
+
             # UPDATE POSITION OF EACH GRASSHOPPER
             for i in range(self.pop_size):
+                temp = pop
                 s_i_total = np.zeros(self.problem_size)
                 for j in range(self.pop_size):
-                    dist = np.sqrt(sum((pop[j][self.ID_POS] - pop[i][self.ID_POS])**2))  # distance = |xjd - xid| in Eq. (2.7)
-                    r_ij_vector = (pop[j][self.ID_POS] - pop[i][self.ID_POS]) / (dist + self.EPSILON)  # xj - xi / dij in Eq.(2.7)
-                    
-                    #NORMALIZE THE DISTANCES BEETWEEN GRASSHOPPERS
-                    xj_xi = 2 + np.remainder(dist, 2)
-                    
-                    s_ij = ((self.ub - self.lb)*c/2) * self._s_function__(xj_xi) * r_ij_vector  # The first part inside the big bracket in Eq. (2.7)
-                    s_i_total += s_ij
-                x_new = c * s_i_total + g_best[self.ID_POS]  # Eq. (2.7) in the paper
-                
-                # BRING THE POSITION OF CURRENT GRASSHOPPER IF IT GOES OUTSIDE THE BOUNDARIES
-                pop[i][self.ID_POS] = self.amend_position(x_new)
-            
+                    if i != j:
+                        # Calculate the distance between two grasshoppers
+                        # dist = np.sqrt(sum((pop[j][self.ID_POS] - pop[i][self.ID_POS])**2))
+                        dist = np.linalg.norm(pop[j][self.ID_POS] - pop[i][self.ID_POS])
+                        # xj-xi/dij in Eq. (2.7)
+                        r_ij = (pop[j][self.ID_POS] - pop[i][self.ID_POS]) / (dist + self.EPSILON)
+                        # |xjd - xid| in Eq. (2.7)
+                        xj_xi = 2 + np.remainder(dist, 2)
+                        # The first part inside the big bracket in Eq. (2.7)
+                        s_ij = ((self.ub - self.lb)*c/2) * self._S_func(xj_xi) * r_ij
+                        s_i_total += s_ij
+                # Eq. (2.7) in the paper
+                x_new = c * s_i_total + g_best[self.ID_POS]
+                # Relocate grasshoppers that go outside the search space
+                temp[i][self.ID_POS] = self.amend_position(x_new)
+            pop = temp
             # CALCULATE FITNESS OF EACH GRASSHOPPER
             for i in range(self.pop_size):
-                fit = self.get_fitness_position(pop[i][self.ID_POS], generation=epoch)
+                fit = self.get_fitness_position(
+                    pop[i][self.ID_POS], generation=epoch)
                 pop[i][self.ID_FIT] = fit
-                progress.progress((epoch*self.pop_size+i+1)/(self.epoch*self.pop_size))
+                progress.progress(((epoch-1)*self.pop_size+i+1) /
+                                  (self.epoch*self.pop_size))
 
             # UPDATE T IF THERE IS A BETTER SOLUTION
-            g_best = self.update_global_best_solution(pop, self.ID_MAX_PROB, g_best)
-            self.loss_train.append(g_best[self.ID_FIT])
+            g_best = self.update_global_best_solution(
+                pop, self.ID_MAX_PROB, g_best)
 
             if self.verbose:
-                print("> Epoch: {}, Best fit: {}, Best pos: {}".format(epoch + 1, g_best[self.ID_FIT], g_best[self.ID_POS]))
+                print("> GENERATION: {}, Best fit: {}, Best pos: {}".format(
+                    epoch, g_best[self.ID_FIT], g_best[self.ID_POS]))
             self.iteration = 0
 
         self.solution = g_best
         self.__fit()
-        return g_best[self.ID_POS], g_best[self.ID_FIT], self.loss_train
+        return g_best[self.ID_POS], g_best[self.ID_FIT]
 
     def __fit(self):
         param = self.solution[self.ID_POS]
-        self.model = SVC(kernel='rbf', decision_function_shape='ovo', C=param[0], gamma=param[1])
+        self.model = SVC(
+            kernel='rbf', decision_function_shape='ovo', C=param[0], gamma=param[1])
         self.min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
         self.min_max_scaler.fit(self.samples)
         X_train = self.min_max_scaler.transform(self.samples)
@@ -196,12 +212,14 @@ def app():
     st.header('Dataset Setting')
     col1, col2, col3 = st.beta_columns(3)
     with col1:
-        selected_dataset = st.selectbox('Select Dataset:', ['GPT Complete', 'GPT Split'])
+        selected_dataset = st.selectbox(
+            'Select Dataset:', ['GPT Complete', 'GPT Split'])
     with col2:
-        train_size = st.number_input('Train Size (%):', 10, 90, 80, step=5)
+        train_size = st.number_input('Train Size (%):', 60, 90, 80, step=5)
     with col3:
-        sampling_size = st.number_input('Sampling Size (%):', 5, 100, 100, step=5)
-    
+        sampling_size = st.number_input(
+            'Sampling Size (%):', 5, 100, 100, step=5)
+
     train_size = train_size/100
     sampling_size = sampling_size/100
 
@@ -229,22 +247,25 @@ def app():
     col1, col2 = st.beta_columns(2)
     with col1:
         k_fold = st.number_input('K-Fold :', 2, 10, 5, step=1)
-        gamma_lb = st.number_input('Gamma Range (Lower Bound) :', 1e-4, 99e-4, 1e-4, step=1e-4, format="%.4f")
+        gamma_lb = st.number_input(
+            'Gamma Range (Lower Bound) :', 1e-4, 999e-4, 1e-4, step=1e-4, format="%.4f")
         # range_gamma = st.slider("Parameter gamma range: ", 0.01, 0.5, (1e-02, 0.1), 1e-02)
         pop_size = st.number_input('Population Size :', 1, 100, 30, step=5)
-        c_min = st.number_input('c_min :', 1e-05, 1.0, 1e-05, step=1e-05, format="%.5f")
+        c_min = st.number_input('c_min :', 1e-05, 1.0,
+                                4e-05, step=1e-05, format="%.5f")
         verbose = st.checkbox('Show Backend Output (Verbose)', value=True)
         save = st.checkbox('Save Model')
         if save:
             filename = st.text_input('Filename:')
-            filename = 'GOASVM_' + filename
+            filename = selected_dataset + '_GOASVM_' + filename
 
     with col2:
-        range_C = st.slider("Regulization (C) Range:", 1, 1000, (1, 500), step=1)
-        gamma_ub = st.number_input('Gamma Range (Upper Bound) :', 0.01, 0.9, 0.1, step=0.01, format="%.2f")
-        epoch = st.number_input('Maximum Iterations :', 1, 100, 10, step=1)
+        range_C = st.slider("Regulization (C) Range:",
+                            1, 1000, (1, 100), step=10)
+        gamma_ub = st.number_input(
+            'Gamma Range (Upper Bound) :', 0.1, 1.0, 0.1, step=0.1, format="%.1f")
+        epoch = st.number_input('Maximum Iterations :', 2, 100, 10, step=1)
         c_max = st.number_input('c_max :', 1, 10, 1)
-
 
     range_gamma = [gamma_lb, gamma_ub]
 
@@ -256,13 +277,14 @@ def app():
 
         st.write('**Start The Training Process**')
         bar_progress = st.progress(0.0)
-        md = GOA_SVM(k_fold=k_fold, lb=lb, ub=ub, verbose=verbose, pop_size=pop_size, epoch=epoch, c_minmax=c_minmax)
-        best_pos, best_fit, _ = md.train(X_train, y_train, bar_progress)
+        md = GOA_SVM(k_fold=k_fold, lb=lb, ub=ub, verbose=verbose,
+                     pop_size=pop_size, epoch=epoch, c_minmax=c_minmax)
+        best_pos, best_fit = md.train(X_train, y_train, bar_progress)
         st.write('***Best Solution :***')
         model_solution = pd.DataFrame(
             [best_pos[0], best_pos[1], "{0:.2%}".format(best_fit)],
             index=['Best Param C', 'Best Param Gamma',
-                    'Fitness'],
+                   'Fitness'],
             columns=['Value']
         )
         st.table(model_solution)
@@ -290,4 +312,5 @@ def app():
             md.save_movement_to_csv(filename)
             name = './data/misc/'+filename+'.sav'
             pickle.dump(md, open(name, 'wb'))
-            st.markdown('<span style="color:blue">*The model has been saved.*</span>', True)
+            st.markdown(
+                '<span style="color:blue">*The model has been saved.*</span>', True)

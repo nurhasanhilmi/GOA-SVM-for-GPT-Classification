@@ -13,10 +13,8 @@ import matplotlib.pyplot as plt
 
 
 class GridSearchSVM:
-    def __init__(self, best_C, best_gamma, best_score, k_fold, X_train, X_test, y_train, y_test, y_pred, model, min_max_scaler):
-        self.best_C = best_C
-        self.best_gamma = best_gamma
-        self.best_score = best_score
+    def __init__(self, solution, k_fold, X_train, X_test, y_train, y_test, y_pred, model, min_max_scaler, lb, ub):
+        self.solution = solution
         self.k_fold = k_fold
         self.X_train = X_train
         self.X_test = X_test
@@ -25,6 +23,8 @@ class GridSearchSVM:
         self.y_pred = y_pred
         self.model = model
         self.min_max_scaler = min_max_scaler
+        self.lb = lb
+        self.ub = ub
         
 
 def app():
@@ -61,11 +61,13 @@ def app():
                  'Num. Test Samples', 'Total Samples']
     )
     st.table(dataset_summarize.assign(hack='').set_index('hack'))
-
+    
     st.header('Paremeter Setting')
     range_C = st.slider("C Set (Exponents of 2):", 0, 15, (0, 15), 1)
     range_gamma = st.slider("Gamma Set (Exponents of 2) :", -15, 0, (-15, -0), 1)
 
+    lb = (range_C[0], range_gamma[0])
+    ub = (range_C[1], range_gamma[1])
     C = []
     gamma = []
     # C_header = []
@@ -95,7 +97,7 @@ def app():
     save = st.checkbox('Save Model')
     if save:
         filename = st.text_input('Filename:')
-        filename = 'GridSearchSVM_' + filename
+        filename = selected_dataset + '_GridSearchSVM_' + filename
 
     if st.button('Train & Test'):
         st.write('**Start The Training Process**')
@@ -109,9 +111,9 @@ def app():
         best_gamma = None
         best_C = None
         pop = np.zeros((len(C)*len(gamma),3))
+        iter_progress = 0
         for i, c in enumerate(C):
             for j, g in enumerate(gamma):
-                bar_progress.progress((i*len(C)+j+1)/(len(C)*len(gamma)))
                 if verbose: print(f'C: {c}, Gamma: {g}')
                 scores = []
                 for k, (train_index, test_index) in enumerate(kf.split(X)):
@@ -132,19 +134,21 @@ def app():
                     scores.append(acc)
                     if verbose: print(f'\tFold-{k+1} : {acc}')
                 mean_acc = np.mean(scores)
-                pop[i*len(C)+j] = [c, g, mean_acc]
+                pop[iter_progress] = [c, g, mean_acc]
                 if mean_acc > best_score:
                     best_score = mean_acc
                     best_gamma = g
                     best_C = c
                 if verbose: print('\tMean acc:', mean_acc)
+                iter_progress += 1
+                bar_progress.progress(iter_progress/(len(C)*len(gamma)))
         
         scaler = MinMaxScaler(feature_range=(-1, 1))
         scaler.fit(X_train)
-        X_train = scaler.transform(X_train)
-        X_test = scaler.transform(X_test)
+        X_train_ = scaler.transform(X_train)
+        X_test_ = scaler.transform(X_test)
         clf = SVC(kernel='rbf', decision_function_shape='ovo', C=best_C, gamma=best_gamma)
-        clf.fit(X_train, y_train)
+        clf.fit(X_train_, y_train)
 
         print(f'Best Parameter (C, Gamma) : ({best_C}, {best_gamma}). Fitness: {best_score}')
 
@@ -158,7 +162,7 @@ def app():
         st.table(model_solution)
 
         st.write('**Evaluate The Model**')
-        y_pred = clf.predict(X_test)
+        y_pred = clf.predict(X_test_)
 
         fig = plt.figure()
         conf_matrix = confusion_matrix(y_test, y_pred)
@@ -181,7 +185,9 @@ def app():
             name = './data/misc/'+filename+'.csv'
             pop_df.to_csv(name, index=False)
 
-            md = GridSearchSVM(best_C, best_gamma, best_score, k_fold, X_train, X_test, y_train, y_test, y_pred, clf, scaler)
+            best_param = [best_C, best_gamma]
+            solution = [best_param, best_score]
+            md = GridSearchSVM(solution, k_fold, X_train, X_test, y_train, y_test, y_pred, clf, scaler, lb, ub)
             name = './data/misc/'+filename+'.sav'
             pickle.dump(md, open(name, 'wb'))
             st.markdown('<span style="color:blue">*The model has been saved.*</span>', True)
