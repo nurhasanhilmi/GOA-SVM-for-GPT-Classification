@@ -4,9 +4,10 @@ import numpy as np
 import os
 import plotly.express as px
 import pickle
-from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 import seaborn as sns
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 
 
 def app():
@@ -59,19 +60,20 @@ def app():
             if optimizer == 'GOASVM':
                 best_C = "{0:.6}".format(1.0*best_pos[0])
                 best_gamma = "{0:.6}".format(best_pos[1])
+                indeks = ['Best C', 'Best Gamma', 'Best Fitness']
             elif optimizer == 'GridSearchSVM':
                 best_C = f'{best_pos[0]} (2^{int(np.log2(best_pos[0]))})'
                 best_gamma = f'{best_pos[1]} (2^{int(np.log2(best_pos[1]))})'
+                indeks = ['Best C', 'Best Gamma', 'Val. Accuracy']
             model_solution = pd.DataFrame(
                 [best_C, best_gamma, "{0:.2%}".format(best_fit)],
-                index=['Best C', 'Best Gamma',
-                       'Best Fitness (Avg. Training Acc.)'],
+                index=indeks,
                 columns=['Value']
             )
             st.table(model_solution)
 
-        st.header('Grasshoppers Movement')
         if optimizer == 'GOASVM':
+            st.header('Grasshoppers Movement')
             fig = px.scatter_3d(
                 movement,
                 x='C',
@@ -82,19 +84,25 @@ def app():
                 height=700
             )
         elif optimizer == 'GridSearchSVM':
-            fig = px.scatter_3d(
-                movement,
-                x='C',
-                y='gamma',
-                z='fitness',
+            st.header('Validation Accuracy')
+            movement = movement.pivot(
+                index='C', columns='gamma', values='fitness')
+            fig = px.imshow(
+                np.asmatrix(movement),
+                labels=dict(x="Gamma", y="C", color="Val. Acc."),
+                x=[str(x) for x in movement.columns],
+                y=[str(x) for x in movement.index],
                 width=700,
-                height=700
+                height=700,
+                color_continuous_scale='RdBu_r'
             )
+            fig.update_xaxes(side="top")
         st.write(fig)
         # st.dataframe(movement)
 
-        st.header(f'Training Samples ({used_dataset})')
+        st.header(f'Train Samples ({used_dataset})')
 
+        frac = 0.01
         if optimizer == 'GOASVM':
             train_sample = model.samples
             train_sample['target'] = model.targets
@@ -106,14 +114,16 @@ def app():
             test_sample['target'] = model.y_test
             test_sample['prediction'] = model.y_pred
 
-        st.write(train_sample.shape[0], 'samples')
-        st.dataframe(train_sample)
-        # st.write('Table above showing 1% of data.')
+        st.write(train_sample.shape[0], 'samples | ', int(np.ceil(
+            train_sample.shape[0]/(train_sample.shape[0]+test_sample.shape[0])*100)), '% of total data.')
+        st.dataframe(train_sample.sample(frac=frac, random_state=0))
+        st.write(f'Table above showing {int(frac*100)}% of train samples.')
 
         st.header(f'Test Samples + Prediction ({used_dataset})')
-        st.write(test_sample.shape[0], 'samples')
-        st.dataframe(test_sample)
-        # st.write('Table above showing 5% of data.')
+        st.write(test_sample.shape[0], 'samples | ', int(np.floor(
+            test_sample.shape[0]/(train_sample.shape[0]+test_sample.shape[0])*100)), '% of total data.')
+        st.dataframe(test_sample.sample(frac=frac, random_state=0))
+        st.write(f'Table above showing {int(frac*100)}% of test samples.')
 
         st.header('Confusion Matrix')
         fig = plt.figure()
@@ -133,7 +143,8 @@ def app():
         st.pyplot(fig)
         accuracy = accuracy_score(
             test_sample['target'], test_sample['prediction']) * 100
-        st.write('**Accuracy (%): **: ', accuracy)
+        st.write('**Test Accuracy (%): **: ', accuracy)
+        # st.write(classification_report(test_sample['target'], test_sample['prediction']))
     else:
         st.markdown(
             '<span style="color:red">No models have been saved yet.</span>', True)

@@ -136,8 +136,8 @@ dmypy.json
 
 # data
 data/wav/
-data/misc/
 data/misc2/
+data/misc3/
 data/wav_split/
 data/wav_split_sample/
 data/guitar.rar

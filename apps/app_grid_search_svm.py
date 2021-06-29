@@ -10,6 +10,7 @@ from sklearn.svm import SVC
 
 import seaborn as sns
 import matplotlib.pyplot as plt
+import plotly.express as px
 
 
 class GridSearchSVM:
@@ -36,7 +37,7 @@ def app():
         selected_dataset = st.selectbox(
             'Select Dataset:', ['GPT Complete', 'GPT Split'])
     with col2:
-        train_size = st.number_input('Train Size (%):', 10, 90, 80, step=5)
+        train_size = st.number_input('Train Size (%):', 10, 90, 70, step=5)
     with col3:
         sampling_size = st.number_input(
             'Sampling Size (%):', 5, 100, 100, step=5)
@@ -46,17 +47,17 @@ def app():
 
     if selected_dataset == 'GPT Complete':
         df = pd.read_csv('data/gpt.csv')
-        df = df.sample(frac=sampling_size, random_state=42)
+        df = df.sample(frac=sampling_size, random_state=0)
         X = df.iloc[:, :273]
         y = df['technique']
     elif selected_dataset == 'GPT Split':
         df = pd.read_csv('data/gpt_split.csv')
-        df = df.sample(frac=sampling_size, random_state=42)
+        df = df.sample(frac=sampling_size, random_state=0)
         X = df.iloc[:, :273]
         y = df['technique']
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, train_size=train_size, random_state=42)
+        X, y, train_size=train_size, random_state=0)
     dataset_summarize = pd.DataFrame(
         [[X_train.shape[1], X_train.shape[0], X_test.shape[0], X.shape[0]]],
         columns=['Num. Features', 'Num. Train Samples',
@@ -65,9 +66,9 @@ def app():
     st.table(dataset_summarize.assign(hack='').set_index('hack'))
 
     st.header('Paremeter Setting')
-    range_C = st.slider("C Set (Exponents of 2):", 0, 15, (0, 15), 1)
+    range_C = st.slider("C Set (Exponents of 2):", -20, 20, (-5, 15), 1)
     range_gamma = st.slider(
-        "Gamma Set (Exponents of 2) :", -15, 0, (-15, -0), 1)
+        "Gamma Set (Exponents of 2) :", -20, 20, (-15, 3), 1)
 
     lb = (range_C[0], range_gamma[0])
     ub = (range_C[1], range_gamma[1])
@@ -106,7 +107,7 @@ def app():
         st.write('**Start The Training Process**')
         bar_progress = st.progress(0.0)
 
-        kf = KFold(n_splits=k_fold, shuffle=True, random_state=42)
+        kf = KFold(n_splits=k_fold, shuffle=True, random_state=0)
         X = X_train
         y = y_train
 
@@ -158,20 +159,44 @@ def app():
                   C=best_C, gamma=best_gamma)
         clf.fit(X_train_, y_train)
 
-        print(
-            f'Best Parameter (C, Gamma) : ({best_C}, {best_gamma}). Fitness: {best_score}')
+        if verbose:
+            print(
+                f'Best Parameter (C, Gamma) : ({best_C}, {best_gamma}). Fitness: {best_score}')
 
-        st.write('***Best Solution :***')
+        st.write('***Solution :***')
+        sbest_C = f'{best_C} (2^{int(np.log2(best_C))})'
+        sbest_gamma = f'{best_gamma} (2^{int(np.log2(best_gamma))})'
         model_solution = pd.DataFrame(
-            [best_C, best_gamma, "{0:.2%}".format(best_score)],
-            index=['Best Param C', 'Best Param Gamma',
-                   'Fitness'],
+            [sbest_C, sbest_gamma, "{0:.2%}".format(best_score)],
+            index=['Best C', 'Best Gamma',
+                   'Val. Accuracy'],
             columns=['Value']
         )
         st.table(model_solution)
 
+        columns = ['C', 'gamma', 'fitness']
+        pop_df = pd.DataFrame(pop, columns=columns)
+        movement = pop_df.pivot(index='C', columns='gamma', values='fitness')
+        fig = px.imshow(
+            np.asmatrix(movement),
+            labels=dict(x="Gamma", y="C", color="Val. Acc."),
+            x=[str(x) for x in movement.columns],
+            y=[str(x) for x in movement.index],
+            width=700,
+            height=700,
+            color_continuous_scale='RdBu_r'
+        )
+        fig.update_xaxes(side="top")
+        st.write(fig)
+
         st.write('**Evaluate The Model**')
         y_pred = clf.predict(X_test_)
+
+        test_sample = pd.DataFrame(X_test)
+        test_sample['target'] = y_test
+        test_sample['prediction'] = y_pred
+        st.write(f'Test Samples + Prediction')
+        st.dataframe(test_sample)
 
         fig = plt.figure()
         conf_matrix = confusion_matrix(y_test, y_pred)
@@ -189,8 +214,6 @@ def app():
         st.pyplot(fig)
         st.write('**Accuracy (%): **', accuracy_score(y_test, y_pred)*100)
         if save:
-            columns = ['C', 'gamma', 'fitness']
-            pop_df = pd.DataFrame(pop, columns=columns)
             name = './data/misc/'+filename+'.csv'
             pop_df.to_csv(name, index=False)
 

@@ -1,5 +1,5 @@
 import pandas as pd
-from numpy import exp, zeros, remainder, clip, sqrt, sum, array, mean
+from numpy import exp, zeros, remainder, clip, sqrt, sum, array, mean, linalg, asarray
 from numpy.random import uniform
 from copy import deepcopy
 
@@ -58,7 +58,7 @@ class GOA_SVM:
         fitness = self.get_fitness_position(position=position)
         return [position, fitness]
 
-    def get_fitness_position(self, position=None, generation=0):
+    def get_fitness_position(self, position=None, generation=1):
         kf = KFold(n_splits=self.k_fold, shuffle=True, random_state=42)
         X = self.samples
         y = self.targets
@@ -68,10 +68,16 @@ class GOA_SVM:
                 f'  Grasshopper-{self.iteration+1} Get fitness with pos: {position}')
 
         scores = []
+        train2_index = asarray([0, 2, 4, 6, 9, 11, 13])
+        test2_index = asarray([1, 3, 5, 7, 8, 10, 12])
         for i, (train_index, test_index) in enumerate(kf.split(X)):
 
-            X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-            y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+            if i == 0:
+                X_train, X_test = X.iloc[train2_index], X.iloc[test2_index]
+                y_train, y_test = y.iloc[train2_index], y.iloc[test2_index]
+            else:
+                X_test, X_train = X.iloc[train2_index], X.iloc[test2_index]
+                y_test, y_train = y.iloc[train2_index], y.iloc[test2_index]
 
             scaler = MinMaxScaler(feature_range=(-1, 1))
             scaler.fit(X_train)
@@ -107,7 +113,7 @@ class GOA_SVM:
     def amend_position(self, position=None):
         return clip(position, self.lb, self.ub)
 
-    def _s_function__(self, r_vector=None):
+    def _S_func(self, r_vector=None):
         # Eq.(2.3) in the paper
         f = 0.5
         l = 1.5
@@ -129,7 +135,7 @@ class GOA_SVM:
         self.targets = y
 
         if self.verbose:
-            print('Generation : 0 (Initialization)')
+            print('Generation : 1 (Initialization)')
         # pop = [self.create_solution() for _ in range(self.pop_size)]
         pop = self.manual_create_solution()
         g_best = self.get_global_best_solution(pop=pop, id_fit=self.ID_FIT, id_best=self.ID_MAX_PROB)
@@ -139,41 +145,62 @@ class GOA_SVM:
                 g_best[self.ID_FIT], g_best[self.ID_POS]))
         self.iteration = 0
 
-        for epoch in range(self.epoch):
+        for epoch in range(2, self.epoch+1):
             if self.verbose:
-                print('Generation :', epoch+1)
+                print('GENERATION :', epoch)
 
+            # UPDATE COEFFICIENT c
             # Eq.(2.8) in the paper
-            c = self.c_minmax[1] - epoch * ((self.c_minmax[1] - self.c_minmax[0]) / self.epoch)
+            c = self.c_minmax[1] - epoch * \
+                ((self.c_minmax[1] - self.c_minmax[0]) / self.epoch)
+            print('c:', c)
+            # UPDATE POSITION OF EACH GRASSHOPPER
             for i in range(self.pop_size):
+                temp = pop
                 s_i_total = zeros(self.problem_size)
                 for j in range(self.pop_size):
-                    dist = sqrt(sum((pop[j][self.ID_POS] - pop[i][self.ID_POS])**2))
+                    if i != j:
+                        print(f'G{i+1}-G{j+1}')
+                        # Calculate the distance between two grasshoppers
+                        # dist = np.sqrt(sum((pop[j][self.ID_POS] - pop[i][self.ID_POS])**2))
+                        dist = linalg.norm(
+                            pop[j][self.ID_POS] - pop[i][self.ID_POS])
+                        print('\tdij: ', dist)
+                        # xj-xi/dij in Eq. (2.7)
+                        r_ij = (pop[j][self.ID_POS] - pop[i]
+                                [self.ID_POS]) / (dist + self.EPSILON)
+                        print('\txj-xi:', pop[j][self.ID_POS] - pop[i][self.ID_POS])
+                        print('\txj-xi/dij: ', r_ij)
+                        # |xjd - xid| in Eq. (2.7)
+                        xj_xi = 2 + remainder(dist, 2)
+                        print('\txj_xi: ', xj_xi)
+                        print('\tS(xj_xi)', self._S_func(xj_xi))
+                        # The first part inside the big bracket in Eq. (2.7)
 
-                    # xj - xi / dij in Eq.(2.7)
-                    r_ij_vector = (pop[j][self.ID_POS] - pop[i][self.ID_POS]) / (dist + self.EPSILON)
-
-                    # |xjd - xid| in Eq. (2.7)
-                    xj_xi = 2 + remainder(dist, 2)
-
-                    # The first part inside the big bracket in Eq. (2.7)
-                    s_ij = ((self.ub - self.lb)*c/2) * self._s_function__(xj_xi) * r_ij_vector
-                    s_i_total += s_ij
-
+                        s_ij = ((self.ub - self.lb)*c/2) * self._S_func(xj_xi) * r_ij
+                        print('\tc(ub-lb)/2:', (self.ub - self.lb)*c/2)
+                        print('\tsij', self._S_func(xj_xi) * r_ij)
+                        s_i_total += s_ij
+                print('s_i_total', s_i_total)
                 # Eq. (2.7) in the paper
                 x_new = c * s_i_total + g_best[self.ID_POS]
-                pop[i][self.ID_POS] = self.amend_position(x_new)
-            
+                print(f'X{i+1}_new: ', x_new)
+                # Relocate grasshoppers that go outside the search space
+                temp[i][self.ID_POS] = self.amend_position(x_new)
+            pop = temp
+            # CALCULATE FITNESS OF EACH GRASSHOPPER
             for i in range(self.pop_size):
-                fit = self.get_fitness_position(pop[i][self.ID_POS], generation=epoch+1)
+                fit = self.get_fitness_position(
+                    pop[i][self.ID_POS], generation=epoch)
                 pop[i][self.ID_FIT] = fit
 
-            g_best = self.update_global_best_solution(pop, self.ID_MAX_PROB, g_best)
-            self.loss_train.append(g_best[self.ID_FIT])
+            # UPDATE T IF THERE IS A BETTER SOLUTION
+            g_best = self.update_global_best_solution(
+                pop, self.ID_MAX_PROB, g_best)
 
             if self.verbose:
-                print("> Epoch: {}, Best fit: {}, Best pos: {}".format(
-                    epoch + 1, g_best[self.ID_FIT], g_best[self.ID_POS]))
+                print("> GENERATION: {}, Best fit: {}, Best pos: {}".format(
+                    epoch, g_best[self.ID_FIT], g_best[self.ID_POS]))
             self.iteration = 0
 
         self.solution = g_best

@@ -11,18 +11,19 @@ from methods.goa_svm import GOA_SVM
 from methods.svm import SVM
 
 def main_goa():
-    data = pd.read_csv('data/gpt_split.csv')
+    data = pd.read_csv('data/gpt_split_sample.csv')
 
     X_train = data.iloc[:,:273]
     y_train = data['technique']
 
     verbose = True
     lb = [1, 0.01]
-    ub = [10, 0.1]
+    ub = [10, 1]
     pop_size = 3
-    epoch = 1
+    epoch = 2
     k_fold = 2
-    md = GOA_SVM(k_fold=k_fold, lb=lb, ub=ub, verbose=verbose, pop_size=pop_size, epoch=epoch)
+    c_minmax = (1, 2)
+    md = GOA_SVM(k_fold=k_fold, lb=lb, ub=ub, verbose=verbose, pop_size=pop_size, epoch=epoch, c_minmax=c_minmax)
     best_pos, best_fit, _ = md.train(X_train, y_train)
     print('GLOBAL BEST POSITION : ', best_pos)
     print('GLOBAL BEST FITNESS : ', best_fit)
@@ -71,5 +72,5 @@ def main_svm():
 
 
 if __name__ == '__main__':
-    # main_goa()
-    main_svm()
+    main_goa()
+    # main_svm()

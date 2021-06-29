@@ -12,6 +12,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.svm import SVC
 
 import seaborn as sns
+import plotly.express as px
 import matplotlib.pyplot as plt
 
 
@@ -54,13 +55,14 @@ class GOA_SVM:
                 print("Lower bound and Upper bound need to be a list.")
                 exit(0)
 
-    def init_solution(self):
+    def init_solution(self, i, progress):
         position = np.random.uniform(self.lb, self.ub)
         fitness = self.get_fitness_position(position=position)
+        progress.progress((i+1)/(self.epoch*self.pop_size))
         return [position, fitness]
 
     def get_fitness_position(self, position=None, generation=1):
-        kf = KFold(n_splits=self.k_fold, shuffle=True, random_state=42)
+        kf = KFold(n_splits=self.k_fold, shuffle=True, random_state=0)
         X = self.samples
         y = self.targets
 
@@ -120,7 +122,7 @@ class GOA_SVM:
         if self.verbose:
             print('GENERATION : 1 (Initialization)')
 
-        pop = [self.init_solution() for _ in range(self.pop_size)]
+        pop = [self.init_solution(i, progress) for i in range(self.pop_size)]
         g_best = self.get_global_best_solution(
             pop=pop, id_fit=self.ID_FIT, id_best=self.ID_MAX_PROB)
 
@@ -203,9 +205,9 @@ class GOA_SVM:
 
     def save_movement_to_csv(self, filename='movements'):
         columns = ['generation', 'grasshopper', 'C', 'gamma', 'fitness']
-        df = pd.DataFrame(self.movement, columns=columns)
+        df_movement = pd.DataFrame(self.movement, columns=columns)
         name = './data/misc/'+filename+'.csv'
-        df.to_csv(name, index=False)
+        df_movement.to_csv(name, index=False)
 
 
 def app():
@@ -218,7 +220,7 @@ def app():
         selected_dataset = st.selectbox(
             'Select Dataset:', ['GPT Complete', 'GPT Split'])
     with col2:
-        train_size = st.number_input('Train Size (%):', 60, 90, 80, step=5)
+        train_size = st.number_input('Train Size (%):', 60, 90, 70, step=5)
     with col3:
         sampling_size = st.number_input(
             'Sampling Size (%):', 5, 100, 100, step=5)
@@ -228,17 +230,17 @@ def app():
 
     if selected_dataset == 'GPT Complete':
         df = pd.read_csv('data/gpt.csv')
-        df = df.sample(frac=sampling_size, random_state=42)
+        df = df.sample(frac=sampling_size, random_state=0)
         X = df.iloc[:, :273]
         y = df['technique']
     elif selected_dataset == 'GPT Split':
         df = pd.read_csv('data/gpt_split.csv')
-        df = df.sample(frac=sampling_size, random_state=42)
+        df = df.sample(frac=sampling_size, random_state=0)
         X = df.iloc[:, :273]
         y = df['technique']
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, train_size=train_size, random_state=42)
+        X, y, train_size=train_size, random_state=0)
     dataset_summarize = pd.DataFrame(
         [[X_train.shape[1], X_train.shape[0], X_test.shape[0], X.shape[0]]],
         columns=['Num. Features', 'Num. Train Samples',
@@ -251,7 +253,7 @@ def app():
     with col1:
         k_fold = st.number_input('K-Fold :', 2, 10, 5, step=1)
         gamma_lb = st.number_input(
-            'Gamma Range (Lower Bound) :', 1e-4, 999e-4, 1e-4, step=1e-4, format="%.4f")
+            'Gamma Range (Lower Bound) :', 1e-5, 9999e-5, 5e-5, step=1e-5, format="%.5f")
         # range_gamma = st.slider("Parameter gamma range: ", 0.01, 0.5, (1e-02, 0.1), 1e-02)
         pop_size = st.number_input('Population Size :', 1, 100, 30, step=5)
         c_min = st.number_input('c_min :', 1e-05, 1.0,
@@ -263,10 +265,9 @@ def app():
             filename = selected_dataset + '_GOASVM_' + filename
 
     with col2:
-        range_C = st.slider("Regulization (C) Range:",
-                            1, 1000, (1, 100), step=10)
+        range_C = st.slider("Regulization (C) Range:", 1, 2000, (1, 1000))
         gamma_ub = st.number_input(
-            'Gamma Range (Upper Bound) :', 0.1, 1.0, 0.1, step=0.1, format="%.1f")
+            'Gamma Range (Upper Bound) :', 0.1, 1.0, 0.5, step=0.1, format="%.1f")
         epoch = st.number_input('Maximum Iterations :', 2, 100, 10, step=1)
         c_max = st.number_input('c_max :', 1, 10, 1)
 
@@ -283,17 +284,38 @@ def app():
         md = GOA_SVM(k_fold=k_fold, lb=lb, ub=ub, verbose=verbose,
                      pop_size=pop_size, epoch=epoch, c_minmax=c_minmax)
         best_pos, best_fit = md.train(X_train, y_train, bar_progress)
-        st.write('***Best Solution :***')
+
+        st.write('***Solution :***')
         model_solution = pd.DataFrame(
             [best_pos[0], best_pos[1], "{0:.2%}".format(best_fit)],
-            index=['Best Param C', 'Best Param Gamma',
+            index=['Best C', 'Best Gamma',
                    'Fitness'],
             columns=['Value']
         )
         st.table(model_solution)
 
+        st.write('**Grasshoppers Movement :**')
+        mov_columns = ['generation', 'grasshopper', 'C', 'gamma', 'fitness']
+        mov = pd.DataFrame(md.movement, columns=mov_columns)
+        fig = px.scatter_3d(
+            mov,
+            x='C',
+            y='gamma',
+            z='fitness',
+            color='generation',
+            width=700,
+            height=700
+        )
+        st.write(fig)
+
         st.write('**Evaluate The Model**')
         y_pred = md.predict(X_test, y_test)
+
+        test_sample = pd.DataFrame(X_test)
+        test_sample['target'] = y_test
+        test_sample['prediction'] = y_pred
+        st.write(f'Test Samples + Prediction')
+        st.dataframe(test_sample)
 
         fig = plt.figure()
         conf_matrix = confusion_matrix(y_test, y_pred)
