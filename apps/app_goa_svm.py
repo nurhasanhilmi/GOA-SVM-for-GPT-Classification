@@ -220,7 +220,7 @@ def app():
         selected_dataset = st.selectbox(
             'Select Dataset:', ['GPT Complete', 'GPT Split'])
     with col2:
-        train_size = st.number_input('Train Size (%):', 60, 90, 70, step=5)
+        train_size = st.number_input('Train Size (%):', 60, 90, 90, step=5)
     with col3:
         sampling_size = st.number_input(
             'Sampling Size (%):', 5, 100, 100, step=5)

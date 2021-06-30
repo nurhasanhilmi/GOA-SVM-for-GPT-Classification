@@ -37,7 +37,7 @@ def app():
         selected_dataset = st.selectbox(
             'Select Dataset:', ['GPT Complete', 'GPT Split'])
     with col2:
-        train_size = st.number_input('Train Size (%):', 10, 90, 70, step=5)
+        train_size = st.number_input('Train Size (%):', 60, 90, 90, step=5)
     with col3:
         sampling_size = st.number_input(
             'Sampling Size (%):', 5, 100, 100, step=5)
@@ -66,9 +66,9 @@ def app():
     st.table(dataset_summarize.assign(hack='').set_index('hack'))
 
     st.header('Paremeter Setting')
-    range_C = st.slider("C Set (Exponents of 2):", -20, 20, (-5, 15), 1)
+    range_C = st.slider("C Set (Exponents of 2):", -20, 20, (0, 10), 1)
     range_gamma = st.slider(
-        "Gamma Set (Exponents of 2) :", -20, 20, (-15, 3), 1)
+        "Gamma Set (Exponents of 2) :", -20, 20, (-14, -1), 1)
 
     lb = (range_C[0], range_gamma[0])
     ub = (range_C[1], range_gamma[1])

@@ -122,8 +122,8 @@ def app():
         st.header(f'Test Samples + Prediction ({used_dataset})')
         st.write(test_sample.shape[0], 'samples | ', int(np.floor(
             test_sample.shape[0]/(train_sample.shape[0]+test_sample.shape[0])*100)), '% of total data.')
-        st.dataframe(test_sample.sample(frac=frac, random_state=0))
-        st.write(f'Table above showing {int(frac*100)}% of test samples.')
+        st.dataframe(test_sample.sample(frac=1, random_state=0))
+        # st.write(f'Table above showing {int(frac*100)}% of test samples.')
 
         st.header('Confusion Matrix')
         fig = plt.figure()
@@ -147,4 +147,4 @@ def app():
         # st.write(classification_report(test_sample['target'], test_sample['prediction']))
     else:
         st.markdown(
-            '<span style="color:red">No models have been saved yet.</span>', True)
+            '<span style="color:red">No model has been saved yet.</span>', True)
