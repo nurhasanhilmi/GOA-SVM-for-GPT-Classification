@@ -1,13 +1,14 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
 import os
-import plotly.express as px
 import pickle
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
-import seaborn as sns
+
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import plotly.express as px
 import plotly.graph_objects as go
+import seaborn as sns
+import streamlit as st
+from sklearn.metrics import classification_report, confusion_matrix, f1_score
 
 
 def app():
@@ -60,11 +61,11 @@ def app():
             if optimizer == 'GOASVM':
                 best_C = "{0:.6}".format(1.0*best_pos[0])
                 best_gamma = "{0:.6}".format(best_pos[1])
-                indeks = ['Best C', 'Best Gamma', 'Best Fitness']
+                indeks = ['Best C', 'Best Gamma', 'Fitness (Avg. F-Score)']
             elif optimizer == 'GridSearchSVM':
                 best_C = f'{best_pos[0]} (2^{int(np.log2(best_pos[0]))})'
                 best_gamma = f'{best_pos[1]} (2^{int(np.log2(best_pos[1]))})'
-                indeks = ['Best C', 'Best Gamma', 'Val. Accuracy']
+                indeks = ['Best C', 'Best Gamma', 'Val. F-Score']
             model_solution = pd.DataFrame(
                 [best_C, best_gamma, "{0:.2%}".format(best_fit)],
                 index=indeks,
@@ -100,8 +101,6 @@ def app():
         st.write(fig)
         # st.dataframe(movement)
 
-        st.header(f'Train Samples ({used_dataset})')
-
         frac = 0.01
         if optimizer == 'GOASVM':
             train_sample = model.samples
@@ -114,16 +113,21 @@ def app():
             test_sample['target'] = model.y_test
             test_sample['prediction'] = model.y_pred
 
-        st.write(train_sample.shape[0], 'samples | ', int(np.ceil(
-            train_sample.shape[0]/(train_sample.shape[0]+test_sample.shape[0])*100)), '% of total data.')
+        n_train = np.ceil(
+            train_sample.shape[0]/(train_sample.shape[0]+test_sample.shape[0])*100)
+        n_test = 100 - n_train
+
+        st.header(f'Train Samples ({used_dataset})')
+        st.write(
+            f'`{train_sample.shape[0]}` samples | `{n_train:.0f}%` of total data. ')
         st.dataframe(train_sample.sample(frac=frac, random_state=0))
-        st.write(f'Table above showing {int(frac*100)}% of train samples.')
+        st.text(f'Table above showing only {int(frac*100)}% of train samples.')
 
         st.header(f'Test Samples + Prediction ({used_dataset})')
-        st.write(test_sample.shape[0], 'samples | ', int(np.floor(
-            test_sample.shape[0]/(train_sample.shape[0]+test_sample.shape[0])*100)), '% of total data.')
-        st.dataframe(test_sample.sample(frac=1, random_state=0))
-        # st.write(f'Table above showing {int(frac*100)}% of test samples.')
+        st.write(
+            f'`{test_sample.shape[0]}` samples | `{n_test:.0f}%` of total data')
+        st.dataframe(test_sample.sample(frac=frac, random_state=0))
+        st.text(f'Table above showing only {int(frac*100)}% of test samples.')
 
         st.header('Confusion Matrix')
         fig = plt.figure()
@@ -141,10 +145,13 @@ def app():
         plt.ylabel("Actual", fontweight='bold')
         plt.xlabel("Predicted", fontweight='bold')
         st.pyplot(fig)
-        accuracy = accuracy_score(
-            test_sample['target'], test_sample['prediction']) * 100
-        st.write('**Test Accuracy (%): **: ', accuracy)
-        # st.write(classification_report(test_sample['target'], test_sample['prediction']))
+
+        clf_report = classification_report(
+            test_sample['target'], test_sample['prediction'])
+        print(clf_report)
+        fscore = f1_score(
+            test_sample['target'], test_sample['prediction'], average='weighted')
+        st.subheader(f'Weighted Avg. F1-Score: `{fscore*100.0:.2f}%`')
     else:
         st.markdown(
             '<span style="color:red">No model has been saved yet.</span>', True)

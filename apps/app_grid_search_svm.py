@@ -1,16 +1,15 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
 import pickle
 
-from sklearn.model_selection import train_test_split, KFold
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import accuracy_score, confusion_matrix
-from sklearn.svm import SVC
-
-import seaborn as sns
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 import plotly.express as px
+import seaborn as sns
+import streamlit as st
+from sklearn.metrics import confusion_matrix, f1_score
+from sklearn.model_selection import KFold, train_test_split
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.svm import SVC
 
 
 class GridSearchSVM:
@@ -37,10 +36,10 @@ def app():
         selected_dataset = st.selectbox(
             'Select Dataset:', ['GPT Complete', 'GPT Split'])
     with col2:
-        train_size = st.number_input('Train Size (%):', 60, 90, 90, step=5)
+        train_size = st.number_input('Train Size (%):', 60, 90, 80, step=5)
     with col3:
         sampling_size = st.number_input(
-            'Sampling Size (%):', 5, 100, 100, step=5)
+            'Sampling Size (%):', 5, 100, 10, step=5)
 
     train_size = train_size/100
     sampling_size = sampling_size/100
@@ -136,18 +135,18 @@ def app():
                     clf.fit(X_trn, y_trn)
                     y_pred = clf.predict(X_tst)
 
-                    acc = accuracy_score(y_tst, y_pred)
-                    scores.append(acc)
+                    f1score = f1_score(y_tst, y_pred, average='weighted')
+                    scores.append(f1score)
                     if verbose:
-                        print(f'\tFold-{k+1} : {acc}')
-                mean_acc = np.mean(scores)
-                pop[iter_progress] = [c, g, mean_acc]
-                if mean_acc > best_score:
-                    best_score = mean_acc
+                        print(f'\tFold-{k+1} : {f1score}')
+                avg_fscore = np.mean(scores)
+                pop[iter_progress] = [c, g, avg_fscore]
+                if avg_fscore > best_score:
+                    best_score = avg_fscore
                     best_gamma = g
                     best_C = c
                 if verbose:
-                    print('\tMean acc:', mean_acc)
+                    print('\tAvg. F-Score:', avg_fscore)
                 iter_progress += 1
                 bar_progress.progress(iter_progress/(len(C)*len(gamma)))
 
@@ -169,7 +168,7 @@ def app():
         model_solution = pd.DataFrame(
             [sbest_C, sbest_gamma, "{0:.2%}".format(best_score)],
             index=['Best C', 'Best Gamma',
-                   'Val. Accuracy'],
+                   'Avg. F-Score'],
             columns=['Value']
         )
         st.table(model_solution)
@@ -179,7 +178,7 @@ def app():
         movement = pop_df.pivot(index='C', columns='gamma', values='fitness')
         fig = px.imshow(
             np.asmatrix(movement),
-            labels=dict(x="Gamma", y="C", color="Val. Acc."),
+            labels=dict(x="Gamma", y="C", color="Avg. Val. F-Score"),
             x=[str(x) for x in movement.columns],
             y=[str(x) for x in movement.index],
             width=700,
@@ -212,7 +211,8 @@ def app():
         plt.ylabel("Actual", fontweight='bold')
         plt.xlabel("Predicted", fontweight='bold')
         st.pyplot(fig)
-        st.write('**Accuracy (%): **', accuracy_score(y_test, y_pred)*100)
+        st.write('**F-score: **', f1_score(y_test, y_pred, average='weighted'))
+
         if save:
             name = './data/misc/'+filename+'.csv'
             pop_df.to_csv(name, index=False)

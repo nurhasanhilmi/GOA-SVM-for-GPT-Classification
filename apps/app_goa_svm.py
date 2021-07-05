@@ -1,19 +1,16 @@
-import streamlit as st
-
 import pickle
-import pandas as pd
-import numpy as np
-
 from copy import deepcopy
 
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import plotly.express as px
+import seaborn as sns
+import streamlit as st
+from sklearn.metrics import confusion_matrix, f1_score
 from sklearn.model_selection import KFold, train_test_split
-from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.svm import SVC
-
-import seaborn as sns
-import plotly.express as px
-import matplotlib.pyplot as plt
 
 
 class GOA_SVM:
@@ -23,7 +20,7 @@ class GOA_SVM:
     EPSILON = 10E-10
     iteration = 0
 
-    def __init__(self, k_fold=5, lb=None, ub=None, verbose=True, epoch=100, pop_size=50, c_minmax=(0.00004, 1)):
+    def __init__(self, k_fold=5, lb=None, ub=None, verbose=True, epoch=100, pop_size=50, c_minmax=(0.00001, 1)):
         self.k_fold = k_fold
         self.verbose = verbose
         self.__check_parameters__(lb, ub)
@@ -68,7 +65,7 @@ class GOA_SVM:
 
         if self.verbose:
             print(
-                f'  Grasshopper-{self.iteration+1} Get fitness with pos: {position}')
+                f'  Grasshopper-{self.iteration+1}^{generation}. Get fitness for: {position}')
 
         scores = []
         for i, (train_index, test_index) in enumerate(kf.split(X)):
@@ -86,17 +83,17 @@ class GOA_SVM:
             clf.fit(X_train, y_train)
             y_pred = clf.predict(X_test)
 
-            acc = accuracy_score(y_test, y_pred)
-            scores.append(acc)
+            f1score = f1_score(y_test, y_pred, average='weighted')
+            scores.append(f1score)
             if self.verbose:
-                print(f'\tFold-{i+1} : {acc}')
-        mean_acc = np.mean(scores)
+                print(f'\tFold-{i+1} : {f1score}')
+        avg_fscore = np.mean(scores)
         if self.verbose:
-            print(f'\tMean Acc: {mean_acc}')
+            print(f'\tFitness (Avg. F-score) : {avg_fscore}')
         self.movement.append(
-            [generation, self.iteration+1, position[0], position[1], mean_acc])
+            [generation, self.iteration+1, position[0], position[1], avg_fscore])
         self.iteration += 1
-        return mean_acc
+        return avg_fscore
 
     def get_global_best_solution(self, pop=None, id_fit=None, id_best=None):
         sorted_pop = sorted(pop, key=lambda temp: temp[id_fit])
@@ -220,10 +217,10 @@ def app():
         selected_dataset = st.selectbox(
             'Select Dataset:', ['GPT Complete', 'GPT Split'])
     with col2:
-        train_size = st.number_input('Train Size (%):', 60, 90, 90, step=5)
+        train_size = st.number_input('Train Size (%):', 60, 90, 80, step=5)
     with col3:
         sampling_size = st.number_input(
-            'Sampling Size (%):', 5, 100, 100, step=5)
+            'Sampling Size (%):', 5, 100, 10, step=5)
 
     train_size = train_size/100
     sampling_size = sampling_size/100
@@ -255,9 +252,9 @@ def app():
         gamma_lb = st.number_input(
             'Gamma Range (Lower Bound) :', 1e-5, 9999e-5, 5e-5, step=1e-5, format="%.5f")
         # range_gamma = st.slider("Parameter gamma range: ", 0.01, 0.5, (1e-02, 0.1), 1e-02)
-        pop_size = st.number_input('Population Size :', 1, 100, 30, step=5)
+        pop_size = st.number_input('Population Size :', 1, 100, 50, step=5)
         c_min = st.number_input('c_min :', 1e-05, 1.0,
-                                4e-05, step=1e-05, format="%.5f")
+                                1e-05, step=1e-05, format="%.5f")
         verbose = st.checkbox('Show Backend Output (Verbose)', value=True)
         save = st.checkbox('Save Model')
         if save:
@@ -268,7 +265,7 @@ def app():
         range_C = st.slider("Regulization (C) Range:", 1, 2000, (1, 1000))
         gamma_ub = st.number_input(
             'Gamma Range (Upper Bound) :', 0.1, 1.0, 0.5, step=0.1, format="%.1f")
-        epoch = st.number_input('Maximum Iterations :', 2, 100, 10, step=1)
+        epoch = st.number_input('Maximum Iterations :', 2, 100, 20, step=1)
         c_max = st.number_input('c_max :', 1, 10, 1)
 
     range_gamma = [gamma_lb, gamma_ub]
@@ -331,7 +328,7 @@ def app():
         plt.ylabel("Actual", fontweight='bold')
         plt.xlabel("Predicted", fontweight='bold')
         st.pyplot(fig)
-        st.write('**Accuracy (%): **', accuracy_score(y_test, y_pred)*100)
+        st.write('**F1-score: **', f1_score(y_test, y_pred, average='weighted'))
 
         if save:
             md.save_movement_to_csv(filename)
