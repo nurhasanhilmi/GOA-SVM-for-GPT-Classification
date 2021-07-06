@@ -37,20 +37,20 @@ def app():
                 c_minmax = model.c_minmax
             k_fold = model.k_fold
             c_range = (model.lb[0], model.ub[0])
-            gamma_range = (model.lb[1], model.ub[1])
+            sigma_range = (model.lb[1], model.ub[1])
             if optimizer == 'GOASVM':
                 model_parameter = pd.DataFrame(
-                    [k_fold, pop_size, epoch, c_minmax, c_range, gamma_range],
+                    [k_fold, pop_size, epoch, c_minmax, c_range, sigma_range],
                     index=['K-Fold', 'Pop. Size', 'Maximum Iteration',
-                           'c minmax', 'C Range', 'Gamma Range'],
+                           'c_minmax', 'C Range', 'Sigma Range'],
                     columns=['Value']
                 )
             elif optimizer == 'GridSearchSVM':
                 model_parameter = pd.DataFrame(
                     [k_fold, f'[{c_range[0]},...,{c_range[1]}]',
-                        f'[{gamma_range[0]},...,{gamma_range[1]}]'],
+                        f'[{sigma_range[0]},...,{sigma_range[1]}]'],
                     index=['K-Fold', 'C Set (Exp. of 2)',
-                           'Gamma Set (Exp. of 2)'],
+                           'Sigma Set (Exp. of 2)'],
                     columns=['Value']
                 )
             st.table(model_parameter)
@@ -60,14 +60,14 @@ def app():
             best_fit = model.solution[1]
             if optimizer == 'GOASVM':
                 best_C = "{0:.6}".format(1.0*best_pos[0])
-                best_gamma = "{0:.6}".format(best_pos[1])
-                indeks = ['Best C', 'Best Gamma', 'Fitness (Avg. F-Score)']
+                best_sigma = "{0:.6}".format(best_pos[1])
+                indeks = ['Best C', 'Best Sigma', 'Fitness (Avg. F-Score)']
             elif optimizer == 'GridSearchSVM':
                 best_C = f'{best_pos[0]} (2^{int(np.log2(best_pos[0]))})'
-                best_gamma = f'{best_pos[1]} (2^{int(np.log2(best_pos[1]))})'
-                indeks = ['Best C', 'Best Gamma', 'Val. F-Score']
+                best_sigma = f'{best_pos[1]} (2^{int(np.log2(best_pos[1]))})'
+                indeks = ['Best C', 'Best Sigma', 'Val. F-Score']
             model_solution = pd.DataFrame(
-                [best_C, best_gamma, "{0:.2%}".format(best_fit)],
+                [best_C, best_sigma, "{0:.2%}".format(best_fit)],
                 index=indeks,
                 columns=['Value']
             )
@@ -78,19 +78,19 @@ def app():
             fig = px.scatter_3d(
                 movement,
                 x='C',
-                y='gamma',
-                z='fitness',
-                color='generation',
+                y='Sigma',
+                z='Fitness',
+                color='Generation',
                 width=700,
                 height=700
             )
         elif optimizer == 'GridSearchSVM':
             st.header('Validation Accuracy')
             movement = movement.pivot(
-                index='C', columns='gamma', values='fitness')
+                index='C', columns='Sigma', values='Avg. F-Score')
             fig = px.imshow(
                 np.asmatrix(movement),
-                labels=dict(x="Gamma", y="C", color="Val. Acc."),
+                labels=dict(x="Gamma", y="C", color="Avg. F-Score"),
                 x=[str(x) for x in movement.columns],
                 y=[str(x) for x in movement.index],
                 width=700,

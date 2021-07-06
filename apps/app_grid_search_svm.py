@@ -36,10 +36,10 @@ def app():
         selected_dataset = st.selectbox(
             'Select Dataset:', ['GPT Complete', 'GPT Split'])
     with col2:
-        train_size = st.number_input('Train Size (%):', 60, 90, 80, step=5)
+        train_size = st.number_input('Train Size (%):', 60, 90, 90, step=5)
     with col3:
         sampling_size = st.number_input(
-            'Sampling Size (%):', 5, 100, 10, step=5)
+            'Sampling Size (%):', 5, 100, 100, step=5)
 
     train_size = train_size/100
     sampling_size = sampling_size/100
@@ -65,35 +65,35 @@ def app():
     st.table(dataset_summarize.assign(hack='').set_index('hack'))
 
     st.header('Paremeter Setting')
-    range_C = st.slider("C Set (Exponents of 2):", -20, 20, (0, 10), 1)
-    range_gamma = st.slider(
-        "Gamma Set (Exponents of 2) :", -20, 20, (-14, -1), 1)
+    range_C = st.slider("C Set (Exponents of 2):", -5.0, 10.0, (0.0, 6.5), 0.5)
+    range_sigma = st.slider(
+        "Sigma Set (Exponents of 2) :", -5.0, 10.0, (0.0, 6.5), 0.5)
 
-    lb = (range_C[0], range_gamma[0])
-    ub = (range_C[1], range_gamma[1])
+    lb = (range_C[0], range_sigma[0])
+    ub = (range_C[1], range_sigma[1])
     C = []
-    gamma = []
-    # C_header = []
-    # gamma_header = []
-    for c in range(int(range_C[0]), int(range_C[1]+1)):
+    sigma = []
+    C_header = []
+    sigma_header = []
+    for c in np.arange(range_C[0], range_C[1]+0.5, 0.5):
         C.append(2**c)
-        # C_header.append(f'2^{c}')
+        C_header.append(f'2^{c}')
 
-    for g in range(int(range_gamma[0]), int(range_gamma[1])+1):
-        gamma.append(2**g)
-        # gamma_header.append(f'2^{g}')
+    for g in np.arange(range_sigma[0], range_sigma[1]+0.5, 0.5):
+        sigma.append(2**g)
+        sigma_header.append(f'2^{g}')
 
-    # C_df = pd.DataFrame(C)
-    # C_df = C_df.transpose()
-    # C_df.columns = C_header
-    # st.write('C range value:')
-    # st.dataframe(C_df)
+    C_df = pd.DataFrame(C)
+    C_df = C_df.transpose()
+    C_df.columns = C_header
+    st.write('C Set:')
+    st.dataframe(C_df)
 
-    # gamma_df = pd.DataFrame(gamma)
-    # gamma_df = gamma_df.transpose()
-    # gamma_df.columns = gamma_header
-    # st.write('Gamma range value:')
-    # st.dataframe(gamma_df)
+    sigma_df = pd.DataFrame(sigma)
+    sigma_df = sigma_df.transpose()
+    sigma_df.columns = sigma_header
+    st.write('Sigma Set:')
+    st.dataframe(sigma_df)
 
     k_fold = st.number_input('K-Fold :', 2, 10, 5, step=1)
     verbose = st.checkbox('Show Backend Output (Verbose)', value=True)
@@ -111,14 +111,14 @@ def app():
         y = y_train
 
         best_score = 0
-        best_gamma = None
+        best_sigma = None
         best_C = None
-        pop = np.zeros((len(C)*len(gamma), 3))
+        pop = np.zeros((len(C)*len(sigma), 3))
         iter_progress = 0
         for i, c in enumerate(C):
-            for j, g in enumerate(gamma):
+            for j, g in enumerate(sigma):
                 if verbose:
-                    print(f'C: {c}, Gamma: {g}')
+                    print(f'C: {c}, sigma: {g}')
                 scores = []
                 for k, (train_index, test_index) in enumerate(kf.split(X)):
 
@@ -130,8 +130,9 @@ def app():
                     X_trn = scaler.transform(X_trn)
                     X_tst = scaler.transform(X_tst)
 
+                    gamma_value = 1/(2*g**2)
                     clf = SVC(kernel='rbf',
-                              decision_function_shape='ovo', C=c, gamma=g)
+                              decision_function_shape='ovo', C=c, gamma=gamma_value)
                     clf.fit(X_trn, y_trn)
                     y_pred = clf.predict(X_tst)
 
@@ -140,52 +141,53 @@ def app():
                     if verbose:
                         print(f'\tFold-{k+1} : {f1score}')
                 avg_fscore = np.mean(scores)
-                pop[iter_progress] = [c, g, avg_fscore]
+                pop[iter_progress] = ['%.1f' % np.log2(c),'%.1f' % np.log2(g), avg_fscore]
                 if avg_fscore > best_score:
                     best_score = avg_fscore
-                    best_gamma = g
+                    best_sigma = g
                     best_C = c
                 if verbose:
                     print('\tAvg. F-Score:', avg_fscore)
                 iter_progress += 1
-                bar_progress.progress(iter_progress/(len(C)*len(gamma)))
+                bar_progress.progress(iter_progress/(len(C)*len(sigma)))
 
         scaler = MinMaxScaler(feature_range=(-1, 1))
         scaler.fit(X_train)
         X_train_ = scaler.transform(X_train)
         X_test_ = scaler.transform(X_test)
+        best_gamma_value = 1/(2*best_sigma**2)
         clf = SVC(kernel='rbf', decision_function_shape='ovo',
-                  C=best_C, gamma=best_gamma)
+                  C=best_C, gamma=best_gamma_value)
         clf.fit(X_train_, y_train)
 
         if verbose:
             print(
-                f'Best Parameter (C, Gamma) : ({best_C}, {best_gamma}). Fitness: {best_score}')
+                f'Best Parameter (C, Sigma) : ({best_C}, {best_sigma}). Avg. F-Score: {best_score}')
 
         st.write('***Solution :***')
-        sbest_C = f'{best_C} (2^{int(np.log2(best_C))})'
-        sbest_gamma = f'{best_gamma} (2^{int(np.log2(best_gamma))})'
+        sbest_C = f'{best_C:.4f} (2^{np.log2(best_C):.1f})'
+        sbest_sigma = f'{best_sigma:.4f} (2^{np.log2(best_sigma):.1f})'
         model_solution = pd.DataFrame(
-            [sbest_C, sbest_gamma, "{0:.2%}".format(best_score)],
-            index=['Best C', 'Best Gamma',
+            [sbest_C, sbest_sigma, "{0:.3%}".format(best_score)],
+            index=['Best C', 'Best Sigma',
                    'Avg. F-Score'],
             columns=['Value']
         )
         st.table(model_solution)
 
-        columns = ['C', 'gamma', 'fitness']
+        columns = ['C', 'Sigma', 'Avg. F-Score']
         pop_df = pd.DataFrame(pop, columns=columns)
-        movement = pop_df.pivot(index='C', columns='gamma', values='fitness')
+        movement = pop_df.pivot(index='C', columns='Sigma', values='Avg. F-Score')
         fig = px.imshow(
             np.asmatrix(movement),
-            labels=dict(x="Gamma", y="C", color="Avg. Val. F-Score"),
+            labels=dict(x="Sigma (2<sup>n</sup>)", y="C (2<sup>n</sup>)", color="Avg. F-Score"),
             x=[str(x) for x in movement.columns],
             y=[str(x) for x in movement.index],
             width=700,
             height=700,
             color_continuous_scale='RdBu_r'
         )
-        fig.update_xaxes(side="top")
+        # fig.update_xaxes(side="top")
         st.write(fig)
 
         st.write('**Evaluate The Model**')
@@ -217,7 +219,7 @@ def app():
             name = './data/misc/'+filename+'.csv'
             pop_df.to_csv(name, index=False)
 
-            best_param = [best_C, best_gamma]
+            best_param = [best_C, best_sigma]
             solution = [best_param, best_score]
             md = GridSearchSVM(solution, k_fold, X_train, X_test,
                                y_train, y_test, y_pred, clf, scaler, lb, ub)

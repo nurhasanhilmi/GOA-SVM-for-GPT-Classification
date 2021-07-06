@@ -20,7 +20,7 @@ class GOA_SVM:
     EPSILON = 10E-10
     iteration = 0
 
-    def __init__(self, k_fold=5, lb=None, ub=None, verbose=True, epoch=100, pop_size=50, c_minmax=(0.00001, 1)):
+    def __init__(self, k_fold=5, lb=None, ub=None, verbose=True, epoch=10, pop_size=30, c_minmax=(0.00004, 1)):
         self.k_fold = k_fold
         self.verbose = verbose
         self.__check_parameters__(lb, ub)
@@ -78,8 +78,9 @@ class GOA_SVM:
             X_train = scaler.transform(X_train)
             X_test = scaler.transform(X_test)
 
+            gamma_value = 1/(2*position[1]**2)
             clf = SVC(kernel='rbf', decision_function_shape='ovo',
-                      C=position[0], gamma=position[1])
+                      C=position[0], gamma=gamma_value)
             clf.fit(X_train, y_train)
             y_pred = clf.predict(X_test)
 
@@ -184,8 +185,9 @@ class GOA_SVM:
 
     def __fit(self):
         param = self.solution[self.ID_POS]
+        gamma_value = 1/(2*param[1]**2)
         self.model = SVC(
-            kernel='rbf', decision_function_shape='ovo', C=param[0], gamma=param[1])
+            kernel='rbf', decision_function_shape='ovo', C=param[0], gamma=gamma_value)
         self.min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
         self.min_max_scaler.fit(self.samples)
         X_train = self.min_max_scaler.transform(self.samples)
@@ -201,7 +203,7 @@ class GOA_SVM:
         return y_pred
 
     def save_movement_to_csv(self, filename='movements'):
-        columns = ['generation', 'grasshopper', 'C', 'gamma', 'fitness']
+        columns = ['Generation', 'Grasshopper', 'C', 'Sigma', 'Fitness']
         df_movement = pd.DataFrame(self.movement, columns=columns)
         name = './data/misc/'+filename+'.csv'
         df_movement.to_csv(name, index=False)
@@ -217,10 +219,10 @@ def app():
         selected_dataset = st.selectbox(
             'Select Dataset:', ['GPT Complete', 'GPT Split'])
     with col2:
-        train_size = st.number_input('Train Size (%):', 60, 90, 80, step=5)
+        train_size = st.number_input('Train Size (%):', 60, 90, 90, step=5)
     with col3:
         sampling_size = st.number_input(
-            'Sampling Size (%):', 5, 100, 10, step=5)
+            'Sampling Size (%):', 5, 100, 100, step=5)
 
     train_size = train_size/100
     sampling_size = sampling_size/100
@@ -246,15 +248,15 @@ def app():
     st.table(dataset_summarize.assign(hack='').set_index('hack'))
 
     st.header('Parameter Setting')
+    k_fold = st.number_input('K-Fold :', 2, 10, 5, step=1)
+
     col1, col2 = st.beta_columns(2)
     with col1:
-        k_fold = st.number_input('K-Fold :', 2, 10, 5, step=1)
-        gamma_lb = st.number_input(
-            'Gamma Range (Lower Bound) :', 1e-5, 9999e-5, 5e-5, step=1e-5, format="%.5f")
-        # range_gamma = st.slider("Parameter gamma range: ", 0.01, 0.5, (1e-02, 0.1), 1e-02)
-        pop_size = st.number_input('Population Size :', 1, 100, 50, step=5)
+        range_C = st.slider("C Range:", 1, 300, (1, 100))
+
+        pop_size = st.number_input('Population Size :', 1, 100, 30, step=5)
         c_min = st.number_input('c_min :', 1e-05, 1.0,
-                                1e-05, step=1e-05, format="%.5f")
+                                4e-05, step=1e-05, format="%.5f")
         verbose = st.checkbox('Show Backend Output (Verbose)', value=True)
         save = st.checkbox('Save Model')
         if save:
@@ -262,20 +264,17 @@ def app():
             filename = selected_dataset + '_GOASVM_' + filename
 
     with col2:
-        range_C = st.slider("Regulization (C) Range:", 1, 2000, (1, 1000))
-        gamma_ub = st.number_input(
-            'Gamma Range (Upper Bound) :', 0.1, 1.0, 0.5, step=0.1, format="%.1f")
-        epoch = st.number_input('Maximum Iterations :', 2, 100, 20, step=1)
-        c_max = st.number_input('c_max :', 1, 10, 1)
+        range_sigma = st.slider("Sigma Range: ", 1, 300, (1, 100), 10)
 
-    range_gamma = [gamma_lb, gamma_ub]
+        epoch = st.number_input('Maximum Iterations :', 2, 100, 10, step=1)
+        c_max = st.number_input('c_max :', 1, 10, 1)
+    
+    lb = [range_C[0], range_sigma[0]]
+    ub = [range_C[1], range_sigma[1]]
+    c_minmax = (c_min, c_max)
+    # st.write(k_fold, lb, ub, pop_size, epoch, c_minmax)
 
     if st.button('Train & Test'):
-        lb = [range_C[0], range_gamma[0]]
-        ub = [range_C[1], range_gamma[1]]
-        c_minmax = (c_min, c_max)
-        # print(k_fold, lb, ub, pop_size, epoch, c_minmax)
-
         st.write('**Start The Training Process**')
         bar_progress = st.progress(0.0)
         md = GOA_SVM(k_fold=k_fold, lb=lb, ub=ub, verbose=verbose,
@@ -285,21 +284,21 @@ def app():
         st.write('***Solution :***')
         model_solution = pd.DataFrame(
             [best_pos[0], best_pos[1], "{0:.2%}".format(best_fit)],
-            index=['Best C', 'Best Gamma',
+            index=['Best C', 'Best Sigma',
                    'Fitness'],
             columns=['Value']
         )
         st.table(model_solution)
 
         st.write('**Grasshoppers Movement :**')
-        mov_columns = ['generation', 'grasshopper', 'C', 'gamma', 'fitness']
+        mov_columns = ['Generation', 'Grasshopper', 'C', 'Sigma', 'Fitness']
         mov = pd.DataFrame(md.movement, columns=mov_columns)
         fig = px.scatter_3d(
             mov,
             x='C',
-            y='gamma',
-            z='fitness',
-            color='generation',
+            y='Sigma',
+            z='Fitness',
+            color='Generation',
             width=700,
             height=700
         )
