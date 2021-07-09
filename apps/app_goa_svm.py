@@ -7,7 +7,7 @@ import pandas as pd
 import plotly.express as px
 import seaborn as sns
 import streamlit as st
-from sklearn.metrics import confusion_matrix, f1_score
+from sklearn.metrics import confusion_matrix, f1_score, classification_report
 from sklearn.model_selection import KFold, train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.svm import SVC
@@ -65,7 +65,7 @@ class GOA_SVM:
 
         if self.verbose:
             print(
-                f'  Grasshopper-{self.iteration+1}^{generation}. Get fitness for: {position}')
+                f'   I_{self.iteration+1}^{generation} Position: {position}')
 
         scores = []
         for i, (train_index, test_index) in enumerate(kf.split(X)):
@@ -78,19 +78,22 @@ class GOA_SVM:
             X_train = scaler.transform(X_train)
             X_test = scaler.transform(X_test)
 
-            gamma_value = 1/(2*position[1]**2)
+            sigma_value = 2**position[1]
+            gamma_value = 1/(2*sigma_value**2)
+
+            C_value = 2**position[0]
             clf = SVC(kernel='rbf', decision_function_shape='ovo',
-                      C=position[0], gamma=gamma_value)
+                      C=C_value, gamma=gamma_value)
             clf.fit(X_train, y_train)
             y_pred = clf.predict(X_test)
 
             f1score = f1_score(y_test, y_pred, average='weighted')
             scores.append(f1score)
             if self.verbose:
-                print(f'\tFold-{i+1} : {f1score}')
+                print(f'      Fold-{i+1} : {f1score}')
         avg_fscore = np.mean(scores)
         if self.verbose:
-            print(f'\tFitness (Avg. F-score) : {avg_fscore}')
+            print(f'      Fitness : {avg_fscore}')
         self.movement.append(
             [generation, self.iteration+1, position[0], position[1], avg_fscore])
         self.iteration += 1
@@ -118,20 +121,20 @@ class GOA_SVM:
         self.samples = X
         self.targets = y
         if self.verbose:
-            print('GENERATION : 1 (Initialization)')
+            print('\nBEGIN Iteration : 1 (Initialization)')
 
         pop = [self.init_solution(i, progress) for i in range(self.pop_size)]
         g_best = self.get_global_best_solution(
             pop=pop, id_fit=self.ID_FIT, id_best=self.ID_MAX_PROB)
 
         if self.verbose:
-            print("> GENERATION: 1 (Initialization), Best fit: {}, Best pos: {}".format(
+            print("> END Iteration: 1 (Initialization), Best fit: {}, Best pos: {}".format(
                 g_best[self.ID_FIT], g_best[self.ID_POS]))
         self.iteration = 0
 
         for epoch in range(2, self.epoch+1):
             if self.verbose:
-                print('GENERATION :', epoch)
+                print('\nBEGIN Iteration :', epoch)
 
             # UPDATE COEFFICIENT c
             # Eq.(2.8) in the paper
@@ -175,7 +178,7 @@ class GOA_SVM:
                 pop, self.ID_MAX_PROB, g_best)
 
             if self.verbose:
-                print("> GENERATION: {}, Best fit: {}, Best pos: {}".format(
+                print("> END Iteration: {}, Best fit: {}, Best pos: {}".format(
                     epoch, g_best[self.ID_FIT], g_best[self.ID_POS]))
             self.iteration = 0
 
@@ -185,9 +188,11 @@ class GOA_SVM:
 
     def __fit(self):
         param = self.solution[self.ID_POS]
-        gamma_value = 1/(2*param[1]**2)
+        sigma_value = 2**param[1]
+        gamma_value = 1/(2*sigma_value**2)
+        C_value = 2**param[0]
         self.model = SVC(
-            kernel='rbf', decision_function_shape='ovo', C=param[0], gamma=gamma_value)
+            kernel='rbf', decision_function_shape='ovo', C=C_value, gamma=gamma_value)
         self.min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
         self.min_max_scaler.fit(self.samples)
         X_train = self.min_max_scaler.transform(self.samples)
@@ -203,7 +208,7 @@ class GOA_SVM:
         return y_pred
 
     def save_movement_to_csv(self, filename='movements'):
-        columns = ['Generation', 'Grasshopper', 'C', 'Sigma', 'Fitness']
+        columns = ['Iteration', 'Grasshopper', 'C', 'Sigma', 'Fitness']
         df_movement = pd.DataFrame(self.movement, columns=columns)
         name = './data/misc/'+filename+'.csv'
         df_movement.to_csv(name, index=False)
@@ -252,7 +257,7 @@ def app():
 
     col1, col2 = st.beta_columns(2)
     with col1:
-        range_C = st.slider("C Range:", 1, 300, (1, 100))
+        range_C = st.slider("log\u2082C Range:", -5, 15, (0, 10))
 
         pop_size = st.number_input('Population Size :', 1, 100, 30, step=5)
         c_min = st.number_input('c_min :', 1e-05, 1.0,
@@ -264,11 +269,11 @@ def app():
             filename = selected_dataset + '_GOASVM_' + filename
 
     with col2:
-        range_sigma = st.slider("Sigma Range: ", 1, 300, (1, 100), 10)
+        range_sigma = st.slider("log\u2082\u03c3 Range: ", -5, 15, (0, 5))
 
-        epoch = st.number_input('Maximum Iterations :', 2, 100, 10, step=1)
+        epoch = st.number_input('Maximum Iterations :', 2, 100, 10, step=2)
         c_max = st.number_input('c_max :', 1, 10, 1)
-    
+
     lb = [range_C[0], range_sigma[0]]
     ub = [range_C[1], range_sigma[1]]
     c_minmax = (c_min, c_max)
@@ -281,30 +286,52 @@ def app():
                      pop_size=pop_size, epoch=epoch, c_minmax=c_minmax)
         best_pos, best_fit = md.train(X_train, y_train, bar_progress)
 
-        st.write('***Solution :***')
+        st.write('<hr>', unsafe_allow_html=True)
+        st.subheader('Solution :')
+        solution_C = f'{2**best_pos[0]:.4f} ({best_pos[0]:.4f})'
+        solution_sigma = f'{2**best_pos[1]:.4f} ({best_pos[1]:.4f})'
         model_solution = pd.DataFrame(
-            [best_pos[0], best_pos[1], "{0:.2%}".format(best_fit)],
-            index=['Best C', 'Best Sigma',
-                   'Fitness'],
+            [solution_C, solution_sigma, "{0:.2%}".format(best_fit)],
+            index=['Best C (log\u2082C)', 'Best \u03c3 (log\u2082\u03c3)',
+                   'Fitness*'],
             columns=['Value']
         )
         st.table(model_solution)
+        st.text('*Mean CV score of the weighted-average-F1-score of each class.')
 
-        st.write('**Grasshoppers Movement :**')
-        mov_columns = ['Generation', 'Grasshopper', 'C', 'Sigma', 'Fitness']
+        st.write('<hr>', unsafe_allow_html=True)
+        st.subheader('Grasshoppers Movement :')
+        mov_columns = ['Iteration', 'Grasshopper', 'C', 'Sigma', 'Fitness']
         mov = pd.DataFrame(md.movement, columns=mov_columns)
+
+        mov['C'] = np.round(mov['C'], decimals=4)
+        mov['Sigma'] = np.round(mov['Sigma'], decimals=4)
+        mov['Fitness'] = np.round(mov['Fitness']*100, decimals=4)
+
         fig = px.scatter_3d(
             mov,
             x='C',
             y='Sigma',
             z='Fitness',
-            color='Generation',
-            width=700,
-            height=700
+            color='Iteration',
+            width=600,
+            height=600,
+            labels={
+                "C": "log<sub>2</sub>C",
+                "Sigma": "log<sub>2</sub>\u03C3",
+                "Fitness": "Fitness (%)",
+            }
+        )
+        fig.update_layout(
+            scene=dict(
+                xaxis=dict(range=range_C,),
+                yaxis=dict(range=range_sigma,),
+            )
         )
         st.write(fig)
 
-        st.write('**Evaluate The Model**')
+        st.write('<hr>', unsafe_allow_html=True)
+        st.subheader('Evaluate The Model')
         y_pred = md.predict(X_test, y_test)
 
         test_sample = pd.DataFrame(X_test)
@@ -315,6 +342,9 @@ def app():
 
         fig = plt.figure()
         conf_matrix = confusion_matrix(y_test, y_pred)
+        print('\nConfusion matrix')
+        print(conf_matrix)
+
         sns.heatmap(
             conf_matrix,
             cmap=sns.color_palette("light:b", as_cmap=True),
@@ -327,7 +357,11 @@ def app():
         plt.ylabel("Actual", fontweight='bold')
         plt.xlabel("Predicted", fontweight='bold')
         st.pyplot(fig)
-        st.write('**F1-score: **', f1_score(y_test, y_pred, average='weighted'))
+
+        f1score = f1_score(y_test, y_pred, average='weighted')
+        print('\nEvalute the model')
+        print(classification_report(y_test, y_pred))
+        st.subheader(f'Weighted-F1-Score: `{f1score*100:.2f}%`')
 
         if save:
             md.save_movement_to_csv(filename)

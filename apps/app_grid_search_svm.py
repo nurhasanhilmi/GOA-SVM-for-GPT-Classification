@@ -6,14 +6,14 @@ import pandas as pd
 import plotly.express as px
 import seaborn as sns
 import streamlit as st
-from sklearn.metrics import confusion_matrix, f1_score
+from sklearn.metrics import confusion_matrix, f1_score, classification_report
 from sklearn.model_selection import KFold, train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.svm import SVC
 
 
 class GridSearchSVM:
-    def __init__(self, solution, k_fold, X_train, X_test, y_train, y_test, y_pred, model, min_max_scaler, lb, ub):
+    def __init__(self, solution, k_fold, X_train, X_test, y_train, y_test, y_pred, model, min_max_scaler, lb, ub, step_size):
         self.solution = solution
         self.k_fold = k_fold
         self.X_train = X_train
@@ -25,6 +25,7 @@ class GridSearchSVM:
         self.min_max_scaler = min_max_scaler
         self.lb = lb
         self.ub = ub
+        self.step_size = step_size
 
 
 def app():
@@ -65,35 +66,44 @@ def app():
     st.table(dataset_summarize.assign(hack='').set_index('hack'))
 
     st.header('Paremeter Setting')
-    range_C = st.slider("C Set (Exponents of 2):", -5.0, 10.0, (0.0, 6.5), 0.5)
-    range_sigma = st.slider(
-        "Sigma Set (Exponents of 2) :", -5.0, 10.0, (0.0, 6.5), 0.5)
-
-    lb = (range_C[0], range_sigma[0])
-    ub = (range_C[1], range_sigma[1])
     C = []
     sigma = []
     C_header = []
     sigma_header = []
-    for c in np.arange(range_C[0], range_C[1]+0.5, 0.5):
+
+    col1, col2 = st.beta_columns(2)
+    with col1:
+        range_C = st.slider("log\u2082C Set:", -5, 15, (0, 10))
+
+    with col2:
+        range_sigma = st.slider("log\u2082\u03c3 Set:", -5, 15, (0, 5))
+
+    step_size = st.number_input('Step Size:', 0.1, 1.0, 0.5, 0.05)
+    for c in np.round(np.arange(range_C[0], range_C[1]+0.001, step_size), decimals=2):
         C.append(2**c)
         C_header.append(f'2^{c}')
-
-    for g in np.arange(range_sigma[0], range_sigma[1]+0.5, 0.5):
+    for g in np.round(np.arange(range_sigma[0], range_sigma[1]+0.01, step_size), decimals=2):
         sigma.append(2**g)
         sigma_header.append(f'2^{g}')
 
-    C_df = pd.DataFrame(C)
-    C_df = C_df.transpose()
-    C_df.columns = C_header
-    st.write('C Set:')
-    st.dataframe(C_df)
+    col3, col4 = st.beta_columns(2)
+    with col3:
+        C_df = pd.DataFrame(C)
+        C_df = C_df.transpose()
+        C_df.columns = C_header
+        C_df.index = ['value']
+        st.write('C Set:')
+        st.dataframe(C_df)
+    with col4:
+        sigma_df = pd.DataFrame(sigma)
+        sigma_df = sigma_df.transpose()
+        sigma_df.columns = sigma_header
+        sigma_df.index = ['value']
+        st.write('\u03c3 Set:')
+        st.dataframe(sigma_df)
 
-    sigma_df = pd.DataFrame(sigma)
-    sigma_df = sigma_df.transpose()
-    sigma_df.columns = sigma_header
-    st.write('Sigma Set:')
-    st.dataframe(sigma_df)
+    lb = (range_C[0], range_sigma[0])
+    ub = (range_C[1], range_sigma[1])
 
     k_fold = st.number_input('K-Fold :', 2, 10, 5, step=1)
     verbose = st.checkbox('Show Backend Output (Verbose)', value=True)
@@ -118,7 +128,7 @@ def app():
         for i, c in enumerate(C):
             for j, g in enumerate(sigma):
                 if verbose:
-                    print(f'C: {c}, sigma: {g}')
+                    print(f'C: {c}, Sigma: {g}')
                 scores = []
                 for k, (train_index, test_index) in enumerate(kf.split(X)):
 
@@ -141,13 +151,14 @@ def app():
                     if verbose:
                         print(f'\tFold-{k+1} : {f1score}')
                 avg_fscore = np.mean(scores)
-                pop[iter_progress] = ['%.1f' % np.log2(c),'%.1f' % np.log2(g), avg_fscore]
+                pop[iter_progress] = ['%.1f' %
+                                      np.log2(c), '%.1f' % np.log2(g), avg_fscore]
                 if avg_fscore > best_score:
                     best_score = avg_fscore
                     best_sigma = g
                     best_C = c
                 if verbose:
-                    print('\tAvg. F-Score:', avg_fscore)
+                    print('\tFitness:', avg_fscore)
                 iter_progress += 1
                 bar_progress.progress(iter_progress/(len(C)*len(sigma)))
 
@@ -162,41 +173,43 @@ def app():
 
         if verbose:
             print(
-                f'Best Parameter (C, Sigma) : ({best_C}, {best_sigma}). Avg. F-Score: {best_score}')
+                f'Best Parameter (C, Sigma) : ({best_C}, {best_sigma}). Fitness: {best_score}')
 
-        st.write('***Solution :***')
-        sbest_C = f'{best_C:.4f} (2^{np.log2(best_C):.1f})'
-        sbest_sigma = f'{best_sigma:.4f} (2^{np.log2(best_sigma):.1f})'
+        st.subheader('Solution :')
+        solution_C = f'{best_C:.4f} ({np.log2(best_C):.1f})'
+        solution_sigma = f'{best_sigma:.4f} ({np.log2(best_sigma):.1f})'
         model_solution = pd.DataFrame(
-            [sbest_C, sbest_sigma, "{0:.3%}".format(best_score)],
-            index=['Best C', 'Best Sigma',
-                   'Avg. F-Score'],
+            [solution_C, solution_sigma, "{0:.3%}".format(best_score)],
+            index=['Best C (log\u2082C)', 'Best \u03c3 (log\u2082\u03c3)',
+                   'Fitness'],
             columns=['Value']
         )
         st.table(model_solution)
 
-        columns = ['C', 'Sigma', 'Avg. F-Score']
+        columns = ['C', 'Sigma', 'Fitness']
         pop_df = pd.DataFrame(pop, columns=columns)
-        movement = pop_df.pivot(index='C', columns='Sigma', values='Avg. F-Score')
+        pop_df['Fitness (%)'] = pop_df['Fitness']*100
+        movement = pop_df.pivot(
+            index='C', columns='Sigma', values='Fitness (%)')
         fig = px.imshow(
             np.asmatrix(movement),
-            labels=dict(x="Sigma (2<sup>n</sup>)", y="C (2<sup>n</sup>)", color="Avg. F-Score"),
+            labels=dict(x="log\u2082\u03c3", y="log\u2082C",
+                        color="Fitness (%)"),
             x=[str(x) for x in movement.columns],
             y=[str(x) for x in movement.index],
-            width=700,
-            height=700,
-            color_continuous_scale='RdBu_r'
+            width=600,
+            height=600
         )
         # fig.update_xaxes(side="top")
         st.write(fig)
 
-        st.write('**Evaluate The Model**')
+        st.subheader('Evaluate The Model')
         y_pred = clf.predict(X_test_)
 
         test_sample = pd.DataFrame(X_test)
         test_sample['target'] = y_test
         test_sample['prediction'] = y_pred
-        st.write(f'Test Samples + Prediction')
+        st.write('Test Samples + Prediction')
         st.dataframe(test_sample)
 
         fig = plt.figure()
@@ -213,7 +226,11 @@ def app():
         plt.ylabel("Actual", fontweight='bold')
         plt.xlabel("Predicted", fontweight='bold')
         st.pyplot(fig)
-        st.write('**F-score: **', f1_score(y_test, y_pred, average='weighted'))
+
+        f1score = f1_score(y_test, y_pred, average='weighted')
+        print('\nEvalute the model')
+        print(classification_report(y_test, y_pred))
+        st.subheader(f'Weighted-F1-Score: `{f1score*100:.2f}%`')
 
         if save:
             name = './data/misc/'+filename+'.csv'
@@ -222,7 +239,7 @@ def app():
             best_param = [best_C, best_sigma]
             solution = [best_param, best_score]
             md = GridSearchSVM(solution, k_fold, X_train, X_test,
-                               y_train, y_test, y_pred, clf, scaler, lb, ub)
+                               y_train, y_test, y_pred, clf, scaler, lb, ub, step_size)
             name = './data/misc/'+filename+'.sav'
             pickle.dump(md, open(name, 'wb'))
             st.markdown(

@@ -5,7 +5,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
+import plotly.figure_factory as ff
+from scipy.spatial import Delaunay
 import seaborn as sns
 import streamlit as st
 from sklearn.metrics import classification_report, confusion_matrix, f1_score
@@ -42,15 +43,15 @@ def app():
                 model_parameter = pd.DataFrame(
                     [k_fold, pop_size, epoch, c_minmax, c_range, sigma_range],
                     index=['K-Fold', 'Pop. Size', 'Maximum Iteration',
-                           'c_minmax', 'C Range', 'Sigma Range'],
+                           'c_minmax', 'log\u2082C Range', 'log\u2082\u03c3 Range'],
                     columns=['Value']
                 )
             elif optimizer == 'GridSearchSVM':
                 model_parameter = pd.DataFrame(
                     [k_fold, f'[{c_range[0]},...,{c_range[1]}]',
-                        f'[{sigma_range[0]},...,{sigma_range[1]}]'],
-                    index=['K-Fold', 'C Set (Exp. of 2)',
-                           'Sigma Set (Exp. of 2)'],
+                        f'[{sigma_range[0]},...,{sigma_range[1]}]', model.step_size],
+                    index=['K-Fold', 'log\u2082C Set',
+                           'log\u2082\u03c3 Set', 'Step'],
                     columns=['Value']
                 )
             st.table(model_parameter)
@@ -59,13 +60,13 @@ def app():
             best_pos = model.solution[0]
             best_fit = model.solution[1]
             if optimizer == 'GOASVM':
-                best_C = "{0:.6}".format(1.0*best_pos[0])
-                best_sigma = "{0:.6}".format(best_pos[1])
-                indeks = ['Best C', 'Best Sigma', 'Fitness (Avg. F-Score)']
+                best_C = f'{2**best_pos[0]:.4f} ({best_pos[0]:.4f})'
+                best_sigma = f'{2**best_pos[1]:.4f} ({best_pos[1]:.4f})'
             elif optimizer == 'GridSearchSVM':
-                best_C = f'{best_pos[0]} (2^{int(np.log2(best_pos[0]))})'
-                best_sigma = f'{best_pos[1]} (2^{int(np.log2(best_pos[1]))})'
-                indeks = ['Best C', 'Best Sigma', 'Val. F-Score']
+                best_C = f'{best_pos[0]:.4f} ({np.log2(best_pos[0])})'
+                best_sigma = f'{best_pos[1]:.4f} ({np.log2(best_pos[1])})'
+            indeks = ['Best C (log\u2082C)',
+                      'Best \u03c3 (log\u2082\u03c3)', 'Fitness*']
             model_solution = pd.DataFrame(
                 [best_C, best_sigma, "{0:.2%}".format(best_fit)],
                 index=indeks,
@@ -74,32 +75,61 @@ def app():
             st.table(model_solution)
 
         if optimizer == 'GOASVM':
+            movement['C'] = np.round(movement['C'], decimals=4)
+            movement['Sigma'] = np.round(movement['Sigma'], decimals=4)
+            movement['Fitness (%)'] = np.round(
+                movement['Fitness']*100, decimals=4)
             st.header('Grasshoppers Movement')
             fig = px.scatter_3d(
                 movement,
                 x='C',
                 y='Sigma',
-                z='Fitness',
-                color='Generation',
-                width=700,
-                height=700
+                z='Fitness (%)',
+                color='Iteration',
+                labels={
+                    "C": "log<sub>2</sub>C",
+                    "Sigma": "log<sub>2</sub>\u03C3"
+                }
+            )
+            fig.update_layout(
+                scene=dict(
+                    xaxis=dict(range=c_range,),
+                    yaxis=dict(range=sigma_range,),
+                )
             )
         elif optimizer == 'GridSearchSVM':
             st.header('Validation Accuracy')
+            df = movement
             movement = movement.pivot(
-                index='C', columns='Sigma', values='Avg. F-Score')
+                index='C', columns='Sigma', values='Fitness (%)')
             fig = px.imshow(
                 np.asmatrix(movement),
-                labels=dict(x="Gamma", y="C", color="Avg. F-Score"),
+                labels=dict(x="log<sub>2</sub>\u03C3",
+                            y="log<sub>2</sub>C", color="Fitness (%)"),
                 x=[str(x) for x in movement.columns],
                 y=[str(x) for x in movement.index],
-                width=700,
-                height=700,
-                color_continuous_scale='RdBu_r'
+                width=600,
+                height=600
             )
             fig.update_xaxes(side="top")
+
+            x = df['C']
+            y = df['Sigma']
+            z = df['Fitness (%)']
+            points2D = np.vstack([x, y]).T
+            tri = Delaunay(points2D)
+            simplices = tri.simplices
+
+            trisurf = ff.create_trisurf(
+                x=x, y=y, z=z,
+                colormap=(px.colors.sequential.Plasma),
+                simplices=simplices,
+                title=None,
+                width=600,
+                height=600
+            )
+            st.write(trisurf)
         st.write(fig)
-        # st.dataframe(movement)
 
         frac = 0.01
         if optimizer == 'GOASVM':

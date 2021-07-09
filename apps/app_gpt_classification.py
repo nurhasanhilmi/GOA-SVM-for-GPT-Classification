@@ -11,10 +11,7 @@ import scipy.fftpack
 import seaborn as sns
 import streamlit as st
 from scipy.stats import kurtosis, skew
-from sklearn.metrics import accuracy_score, confusion_matrix
-from sklearn.model_selection import KFold, train_test_split
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.svm import SVC
+from sklearn.model_selection import train_test_split
 
 
 def app():
