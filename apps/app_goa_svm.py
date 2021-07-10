@@ -7,7 +7,7 @@ import pandas as pd
 import plotly.express as px
 import seaborn as sns
 import streamlit as st
-from sklearn.metrics import confusion_matrix, f1_score, classification_report
+from sklearn.metrics import confusion_matrix, matthews_corrcoef
 from sklearn.model_selection import KFold, train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.svm import SVC
@@ -87,17 +87,17 @@ class GOA_SVM:
             clf.fit(X_train, y_train)
             y_pred = clf.predict(X_test)
 
-            f1score = f1_score(y_test, y_pred, average='weighted')
-            scores.append(f1score)
+            mcc = matthews_corrcoef(y_test, y_pred)
+            scores.append(mcc)
             if self.verbose:
-                print(f'      Fold-{i+1} : {f1score}')
-        avg_fscore = np.mean(scores)
+                print(f'\tFold-{i+1} : {mcc}')
+        avg_mcc = np.mean(scores)
         if self.verbose:
-            print(f'      Fitness : {avg_fscore}')
+            print(f'\t   Fitness : {avg_mcc}')
         self.movement.append(
-            [generation, self.iteration+1, position[0], position[1], avg_fscore])
+            [generation, self.iteration+1, position[0], position[1], avg_mcc])
         self.iteration += 1
-        return avg_fscore
+        return avg_mcc
 
     def get_global_best_solution(self, pop=None, id_fit=None, id_best=None):
         sorted_pop = sorted(pop, key=lambda temp: temp[id_fit])
@@ -121,7 +121,7 @@ class GOA_SVM:
         self.samples = X
         self.targets = y
         if self.verbose:
-            print('\nBEGIN Iteration : 1 (Initialization)')
+            print('\n> BEGIN Iteration : 1 (Initialization)')
 
         pop = [self.init_solution(i, progress) for i in range(self.pop_size)]
         g_best = self.get_global_best_solution(
@@ -134,7 +134,7 @@ class GOA_SVM:
 
         for epoch in range(2, self.epoch+1):
             if self.verbose:
-                print('\nBEGIN Iteration :', epoch)
+                print('\n> BEGIN Iteration :', epoch)
 
             # UPDATE COEFFICIENT c
             # Eq.(2.8) in the paper
@@ -253,7 +253,7 @@ def app():
     st.table(dataset_summarize.assign(hack='').set_index('hack'))
 
     st.header('Parameter Setting')
-    k_fold = st.number_input('K-Fold :', 2, 10, 5, step=1)
+    k_fold = st.number_input('K-Fold :', 2, 10, 10, step=1)
 
     col1, col2 = st.beta_columns(2)
     with col1:
@@ -269,7 +269,7 @@ def app():
             filename = selected_dataset + '_GOASVM_' + filename
 
     with col2:
-        range_sigma = st.slider("log\u2082\u03c3 Range: ", -5, 15, (0, 5))
+        range_sigma = st.slider("log\u2082\u03c3 Range: ", -5, 15, (0, 7))
 
         epoch = st.number_input('Maximum Iterations :', 2, 100, 10, step=2)
         c_max = st.number_input('c_max :', 1, 10, 1)
@@ -291,13 +291,13 @@ def app():
         solution_C = f'{2**best_pos[0]:.4f} ({best_pos[0]:.4f})'
         solution_sigma = f'{2**best_pos[1]:.4f} ({best_pos[1]:.4f})'
         model_solution = pd.DataFrame(
-            [solution_C, solution_sigma, "{0:.2%}".format(best_fit)],
+            [solution_C, solution_sigma, "{0:.4f}".format(best_fit)],
             index=['Best C (log\u2082C)', 'Best \u03c3 (log\u2082\u03c3)',
                    'Fitness*'],
             columns=['Value']
         )
         st.table(model_solution)
-        st.text('*Mean CV score of the weighted-average-F1-score of each class.')
+        st.text('*Average of Cross Validation (CV) Matthews Correlation Coefficient (MCC).')
 
         st.write('<hr>', unsafe_allow_html=True)
         st.subheader('Grasshoppers Movement :')
@@ -306,7 +306,7 @@ def app():
 
         mov['C'] = np.round(mov['C'], decimals=4)
         mov['Sigma'] = np.round(mov['Sigma'], decimals=4)
-        mov['Fitness'] = np.round(mov['Fitness']*100, decimals=4)
+        mov['Fitness'] = np.round(mov['Fitness'], decimals=4)
 
         fig = px.scatter_3d(
             mov,
@@ -318,8 +318,7 @@ def app():
             height=600,
             labels={
                 "C": "log<sub>2</sub>C",
-                "Sigma": "log<sub>2</sub>\u03C3",
-                "Fitness": "Fitness (%)",
+                "Sigma": "log<sub>2</sub>\u03C3"
             }
         )
         fig.update_layout(
@@ -358,10 +357,8 @@ def app():
         plt.xlabel("Predicted", fontweight='bold')
         st.pyplot(fig)
 
-        f1score = f1_score(y_test, y_pred, average='weighted')
-        print('\nEvalute the model')
-        print(classification_report(y_test, y_pred))
-        st.subheader(f'Weighted-F1-Score: `{f1score*100:.2f}%`')
+        mcc = matthews_corrcoef(y_test, y_pred)
+        st.subheader(f'MCC: `{mcc:.4f}`')
 
         if save:
             md.save_movement_to_csv(filename)

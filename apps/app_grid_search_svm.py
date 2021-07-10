@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.express as px
 import seaborn as sns
 import streamlit as st
-from sklearn.metrics import confusion_matrix, f1_score, classification_report
+from sklearn.metrics import confusion_matrix, matthews_corrcoef
 from sklearn.model_selection import KFold, train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.svm import SVC
@@ -76,7 +76,7 @@ def app():
         range_C = st.slider("log\u2082C Set:", -5, 15, (0, 10))
 
     with col2:
-        range_sigma = st.slider("log\u2082\u03c3 Set:", -5, 15, (0, 5))
+        range_sigma = st.slider("log\u2082\u03c3 Set:", -5, 15, (0, 7))
 
     step_size = st.number_input('Step Size:', 0.1, 1.0, 0.5, 0.05)
     for c in np.round(np.arange(range_C[0], range_C[1]+0.001, step_size), decimals=2):
@@ -105,7 +105,7 @@ def app():
     lb = (range_C[0], range_sigma[0])
     ub = (range_C[1], range_sigma[1])
 
-    k_fold = st.number_input('K-Fold :', 2, 10, 5, step=1)
+    k_fold = st.number_input('K-Fold :', 2, 10, 10, step=1)
     verbose = st.checkbox('Show Backend Output (Verbose)', value=True)
     save = st.checkbox('Save Model')
     if save:
@@ -146,19 +146,19 @@ def app():
                     clf.fit(X_trn, y_trn)
                     y_pred = clf.predict(X_tst)
 
-                    f1score = f1_score(y_tst, y_pred, average='weighted')
-                    scores.append(f1score)
+                    mcc = matthews_corrcoef(y_tst, y_pred)
+                    scores.append(mcc)
                     if verbose:
-                        print(f'\tFold-{k+1} : {f1score}')
-                avg_fscore = np.mean(scores)
+                        print(f'\tFold-{k+1} : {mcc}')
+                avg_mcc = np.mean(scores)
                 pop[iter_progress] = ['%.1f' %
-                                      np.log2(c), '%.1f' % np.log2(g), avg_fscore]
-                if avg_fscore > best_score:
-                    best_score = avg_fscore
+                                      np.log2(c), '%.1f' % np.log2(g), avg_mcc]
+                if avg_mcc > best_score:
+                    best_score = avg_mcc
                     best_sigma = g
                     best_C = c
                 if verbose:
-                    print('\tFitness:', avg_fscore)
+                    print('   Fitness:', avg_mcc)
                 iter_progress += 1
                 bar_progress.progress(iter_progress/(len(C)*len(sigma)))
 
@@ -179,7 +179,7 @@ def app():
         solution_C = f'{best_C:.4f} ({np.log2(best_C):.1f})'
         solution_sigma = f'{best_sigma:.4f} ({np.log2(best_sigma):.1f})'
         model_solution = pd.DataFrame(
-            [solution_C, solution_sigma, "{0:.3%}".format(best_score)],
+            [solution_C, solution_sigma, "{0:.4f}".format(best_score)],
             index=['Best C (log\u2082C)', 'Best \u03c3 (log\u2082\u03c3)',
                    'Fitness'],
             columns=['Value']
@@ -188,13 +188,12 @@ def app():
 
         columns = ['C', 'Sigma', 'Fitness']
         pop_df = pd.DataFrame(pop, columns=columns)
-        pop_df['Fitness (%)'] = pop_df['Fitness']*100
         movement = pop_df.pivot(
-            index='C', columns='Sigma', values='Fitness (%)')
+            index='C', columns='Sigma', values='Fitness')
         fig = px.imshow(
             np.asmatrix(movement),
             labels=dict(x="log\u2082\u03c3", y="log\u2082C",
-                        color="Fitness (%)"),
+                        color="Fitness"),
             x=[str(x) for x in movement.columns],
             y=[str(x) for x in movement.index],
             width=600,
@@ -227,10 +226,8 @@ def app():
         plt.xlabel("Predicted", fontweight='bold')
         st.pyplot(fig)
 
-        f1score = f1_score(y_test, y_pred, average='weighted')
-        print('\nEvalute the model')
-        print(classification_report(y_test, y_pred))
-        st.subheader(f'Weighted-F1-Score: `{f1score*100:.2f}%`')
+        mcc = matthews_corrcoef(y_test, y_pred)
+        st.subheader(f'MCC: `{mcc:.4f}`')
 
         if save:
             name = './data/misc/'+filename+'.csv'

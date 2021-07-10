@@ -9,7 +9,7 @@ import plotly.figure_factory as ff
 from scipy.spatial import Delaunay
 import seaborn as sns
 import streamlit as st
-from sklearn.metrics import classification_report, confusion_matrix, f1_score
+from sklearn.metrics import classification_report, confusion_matrix, matthews_corrcoef
 
 
 def app():
@@ -68,7 +68,7 @@ def app():
             indeks = ['Best C (log\u2082C)',
                       'Best \u03c3 (log\u2082\u03c3)', 'Fitness*']
             model_solution = pd.DataFrame(
-                [best_C, best_sigma, "{0:.2%}".format(best_fit)],
+                [best_C, best_sigma, "{0:.4f}".format(best_fit)],
                 index=indeks,
                 columns=['Value']
             )
@@ -77,14 +77,13 @@ def app():
         if optimizer == 'GOASVM':
             movement['C'] = np.round(movement['C'], decimals=4)
             movement['Sigma'] = np.round(movement['Sigma'], decimals=4)
-            movement['Fitness (%)'] = np.round(
-                movement['Fitness']*100, decimals=4)
+            movement['Fitness'] = np.round(movement['Fitness'], decimals=4)
             st.header('Grasshoppers Movement')
             fig = px.scatter_3d(
                 movement,
                 x='C',
                 y='Sigma',
-                z='Fitness (%)',
+                z='Fitness',
                 color='Iteration',
                 labels={
                     "C": "log<sub>2</sub>C",
@@ -101,11 +100,11 @@ def app():
             st.header('Validation Accuracy')
             df = movement
             movement = movement.pivot(
-                index='C', columns='Sigma', values='Fitness (%)')
+                index='C', columns='Sigma', values='Fitness')
             fig = px.imshow(
                 np.asmatrix(movement),
                 labels=dict(x="log<sub>2</sub>\u03C3",
-                            y="log<sub>2</sub>C", color="Fitness (%)"),
+                            y="log<sub>2</sub>C", color="Fitness"),
                 x=[str(x) for x in movement.columns],
                 y=[str(x) for x in movement.index],
                 width=600,
@@ -115,7 +114,7 @@ def app():
 
             x = df['C']
             y = df['Sigma']
-            z = df['Fitness (%)']
+            z = df['Fitness']
             points2D = np.vstack([x, y]).T
             tri = Delaunay(points2D)
             simplices = tri.simplices
@@ -179,9 +178,8 @@ def app():
         clf_report = classification_report(
             test_sample['target'], test_sample['prediction'])
         print(clf_report)
-        fscore = f1_score(
-            test_sample['target'], test_sample['prediction'], average='weighted')
-        st.subheader(f'Weighted Avg. F1-Score: `{fscore*100.0:.2f}%`')
+        mcc = matthews_corrcoef(test_sample['target'], test_sample['prediction'])
+        st.subheader(f'MCC: `{mcc:.4f}`')
     else:
         st.markdown(
             '<span style="color:red">No model has been saved yet.</span>', True)
