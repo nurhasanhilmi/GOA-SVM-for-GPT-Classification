@@ -12,6 +12,8 @@ from sklearn.model_selection import KFold, train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.svm import SVC
 
+from constants import RANDOM_STATE
+
 
 class GOA_SVM:
     ID_MAX_PROB = -1  # max problem
@@ -59,7 +61,8 @@ class GOA_SVM:
         return [position, fitness]
 
     def get_fitness_position(self, position=None, generation=1):
-        kf = KFold(n_splits=self.k_fold, shuffle=True, random_state=0)
+        kf = KFold(n_splits=self.k_fold, shuffle=True,
+                   random_state=RANDOM_STATE)
         X = self.samples
         y = self.targets
 
@@ -234,17 +237,17 @@ def app():
 
     if selected_dataset == 'GPT Complete':
         df = pd.read_csv('data/gpt.csv')
-        df = df.sample(frac=sampling_size, random_state=0)
+        df = df.sample(frac=sampling_size, random_state=RANDOM_STATE)
         X = df.iloc[:, :273]
         y = df['technique']
     elif selected_dataset == 'GPT Split':
         df = pd.read_csv('data/gpt_split.csv')
-        df = df.sample(frac=sampling_size, random_state=0)
+        df = df.sample(frac=sampling_size, random_state=RANDOM_STATE)
         X = df.iloc[:, :273]
         y = df['technique']
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, train_size=train_size, random_state=0)
+        X, y, train_size=train_size, random_state=RANDOM_STATE)
     dataset_summarize = pd.DataFrame(
         [[X_train.shape[1], X_train.shape[0], X_test.shape[0], X.shape[0]]],
         columns=['Num. Features', 'Num. Train Samples',
@@ -297,7 +300,8 @@ def app():
             columns=['Value']
         )
         st.table(model_solution)
-        st.text('*Average of Cross Validation (CV) Matthews Correlation Coefficient (MCC).')
+        st.text(
+            '*Average of Cross Validation (CV) Matthews Correlation Coefficient (MCC).')
 
         st.write('<hr>', unsafe_allow_html=True)
         st.subheader('Grasshoppers Movement :')

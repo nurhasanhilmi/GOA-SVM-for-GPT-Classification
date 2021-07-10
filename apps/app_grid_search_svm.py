@@ -11,6 +11,8 @@ from sklearn.model_selection import KFold, train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.svm import SVC
 
+from constants import RANDOM_STATE
+
 
 class GridSearchSVM:
     def __init__(self, solution, k_fold, X_train, X_test, y_train, y_test, y_pred, model, min_max_scaler, lb, ub, step_size):
@@ -47,17 +49,17 @@ def app():
 
     if selected_dataset == 'GPT Complete':
         df = pd.read_csv('data/gpt.csv')
-        df = df.sample(frac=sampling_size, random_state=0)
+        df = df.sample(frac=sampling_size, random_state=RANDOM_STATE)
         X = df.iloc[:, :273]
         y = df['technique']
     elif selected_dataset == 'GPT Split':
         df = pd.read_csv('data/gpt_split.csv')
-        df = df.sample(frac=sampling_size, random_state=0)
+        df = df.sample(frac=sampling_size, random_state=RANDOM_STATE)
         X = df.iloc[:, :273]
         y = df['technique']
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, train_size=train_size, random_state=0)
+        X, y, train_size=train_size, random_state=RANDOM_STATE)
     dataset_summarize = pd.DataFrame(
         [[X_train.shape[1], X_train.shape[0], X_test.shape[0], X.shape[0]]],
         columns=['Num. Features', 'Num. Train Samples',
@@ -116,7 +118,7 @@ def app():
         st.write('**Start The Training Process**')
         bar_progress = st.progress(0.0)
 
-        kf = KFold(n_splits=k_fold, shuffle=True, random_state=0)
+        kf = KFold(n_splits=k_fold, shuffle=True, random_state=RANDOM_STATE)
         X = X_train
         y = y_train
 

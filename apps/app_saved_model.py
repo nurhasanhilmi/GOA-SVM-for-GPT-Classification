@@ -6,10 +6,13 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.figure_factory as ff
-from scipy.spatial import Delaunay
 import seaborn as sns
 import streamlit as st
-from sklearn.metrics import classification_report, confusion_matrix, matthews_corrcoef
+from scipy.spatial import Delaunay
+from sklearn.metrics import (classification_report, confusion_matrix,
+                             matthews_corrcoef)
+
+from constants import RANDOM_STATE
 
 
 def app():
@@ -149,13 +152,13 @@ def app():
         st.header(f'Train Samples ({used_dataset})')
         st.write(
             f'`{train_sample.shape[0]}` samples | `{n_train:.0f}%` of total data. ')
-        st.dataframe(train_sample.sample(frac=frac, random_state=0))
+        st.dataframe(train_sample.sample(frac=frac, random_state=RANDOM_STATE))
         st.text(f'Table above showing only {int(frac*100)}% of train samples.')
 
         st.header(f'Test Samples + Prediction ({used_dataset})')
         st.write(
             f'`{test_sample.shape[0]}` samples | `{n_test:.0f}%` of total data')
-        st.dataframe(test_sample.sample(frac=frac, random_state=0))
+        st.dataframe(test_sample.sample(frac=frac, random_state=RANDOM_STATE))
         st.text(f'Table above showing only {int(frac*100)}% of test samples.')
 
         st.header('Confusion Matrix')
@@ -178,7 +181,8 @@ def app():
         clf_report = classification_report(
             test_sample['target'], test_sample['prediction'])
         print(clf_report)
-        mcc = matthews_corrcoef(test_sample['target'], test_sample['prediction'])
+        mcc = matthews_corrcoef(
+            test_sample['target'], test_sample['prediction'])
         st.subheader(f'MCC: `{mcc:.4f}`')
     else:
         st.markdown(

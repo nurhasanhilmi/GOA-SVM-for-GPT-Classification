@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from constants import RANDOM_STATE
+
 
 def app():
     gpt = pd.read_csv('data/gpt.csv')
@@ -118,9 +120,9 @@ def app():
         ''')
     # st.write('The audio descriptors are computed using python package for music and audio analysis, [librosa](https://librosa.org/doc/latest/index.html).')
     st.markdown('### GPT-complete dataset (1% sampling)')
-    sample_gpt = gpt.sample(frac=0.01, random_state=0)
+    sample_gpt = gpt.sample(frac=0.01, random_state=RANDOM_STATE)
     st.dataframe(sample_gpt)
 
     st.markdown('### GPT-split dataset (1% sampling)')
-    sample_gpt_split = gpt_split.sample(frac=0.01, random_state=0)
+    sample_gpt_split = gpt_split.sample(frac=0.01, random_state=RANDOM_STATE)
     st.dataframe(sample_gpt_split)

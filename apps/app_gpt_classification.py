@@ -13,6 +13,8 @@ import streamlit as st
 from scipy.stats import kurtosis, skew
 from sklearn.model_selection import train_test_split
 
+from constants import RANDOM_STATE
+
 
 def app():
     st.title('GPT Classification')
@@ -52,13 +54,13 @@ def app():
             train_sample.shape[0]/(train_sample.shape[0]+test_sample.shape[0])*100)
         n_frac = int(
             (train_sample.shape[0]+test_sample.shape[0])/data.shape[0]*100.0)
-        data = data.sample(frac=n_frac/100.0, random_state=0)
+        data = data.sample(frac=n_frac/100.0, random_state=RANDOM_STATE)
 
         audio_path = data['file_path']
         y = data['technique']
 
         _, X_test, _, y_test = train_test_split(
-            audio_path, y, train_size=n_train/100.0, random_state=0)
+            audio_path, y, train_size=n_train/100.0, random_state=RANDOM_STATE)
         data_test = pd.DataFrame(X_test)
         # data_test['technique'] = y_test
         data_test = data_test.sort_values('file_path')
