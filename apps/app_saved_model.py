@@ -12,7 +12,7 @@ from scipy.spatial import Delaunay
 from sklearn.metrics import (classification_report, confusion_matrix,
                              matthews_corrcoef)
 
-from constants import RANDOM_STATE
+from .constants import RANDOM_STATE
 
 
 def app():

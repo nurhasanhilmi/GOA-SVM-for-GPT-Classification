@@ -11,7 +11,7 @@ from sklearn.model_selection import KFold, train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.svm import SVC
 
-from constants import RANDOM_STATE
+from .constants import RANDOM_STATE
 
 
 class GridSearchSVM:

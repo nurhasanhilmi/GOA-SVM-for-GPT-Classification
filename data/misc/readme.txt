@@ -1,1 +1,0 @@
-this directory is used to store trained model files.

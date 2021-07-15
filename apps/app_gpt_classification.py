@@ -13,7 +13,7 @@ import streamlit as st
 from scipy.stats import kurtosis, skew
 from sklearn.model_selection import train_test_split
 
-from constants import RANDOM_STATE
+from .constants import RANDOM_STATE
 
 
 def app():

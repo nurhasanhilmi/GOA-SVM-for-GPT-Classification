@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from constants import RANDOM_STATE
+from .constants import RANDOM_STATE
 
 
 def app():
