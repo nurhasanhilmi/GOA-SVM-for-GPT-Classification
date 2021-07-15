@@ -135,10 +135,12 @@ dmypy.json
 .idea/
 
 # data
-data/wav/
+data/guitar
+data/IDMT-SMT-GUITAR_V2
+data/guitar.rar
+data/IDMT-SMT-GUITAR_V2.zip
+
 data/misc/*.csv
 data/misc/*.sav
-data/wav_split/
-data/wav_split_sample/
-data/guitar.rar
-notebooks/csv/
+
+notebooks/csv
