@@ -1,5 +1,4 @@
 import pickle
-from copy import deepcopy
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,11 +7,9 @@ import plotly.express as px
 import seaborn as sns
 import streamlit as st
 from sklearn.metrics import confusion_matrix, matthews_corrcoef
-from sklearn.model_selection import KFold, train_test_split
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.svm import SVC
+from sklearn.model_selection import train_test_split
 
-from .constants import RANDOM_STATE
+from .constants import RANDOM_STATE, DATASET_PATH
 from .goa_svm import GOA_SVM
 
 
@@ -20,32 +17,29 @@ def app():
     st.title('GOA-SVM')
 
     st.header('Dataset Setting')
-    col1, col2, col3 = st.beta_columns(3)
+    col1, col2 = st.beta_columns(2)
     with col1:
-        selected_dataset = st.selectbox(
-            'Select Dataset:', ['GPT Complete', 'GPT Split'])
+        sampling_size = st.number_input('Sampling Size (%):', 5, 100, 100, 5)
     with col2:
-        train_size = st.number_input('Train Size (%):', 60, 90, 90, step=5)
-    with col3:
-        sampling_size = st.number_input(
-            'Sampling Size (%):', 5, 100, 100, step=5)
+        train_size = st.number_input('Train Size (%):', 60, 90, 90, 5)
+
+    df = pd.read_csv(DATASET_PATH)
+    if sampling_size != 100:
+        sampling_size = sampling_size/100
+        df = df.sample(frac=sampling_size, random_state=RANDOM_STATE)
+    X = df.iloc[:, :156]
+    y = df['technique']
+    y_sub = df['subtechnique']
 
     train_size = train_size/100
-    sampling_size = sampling_size/100
-
-    if selected_dataset == 'GPT Complete':
-        df = pd.read_csv('data/gpt.csv')
-        df = df.sample(frac=sampling_size, random_state=RANDOM_STATE)
-        X = df.iloc[:, :273]
-        y = df['technique']
-    elif selected_dataset == 'GPT Split':
-        df = pd.read_csv('data/gpt_split.csv')
-        df = df.sample(frac=sampling_size, random_state=RANDOM_STATE)
-        X = df.iloc[:, :273]
-        y = df['technique']
-
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, train_size=train_size, random_state=RANDOM_STATE)
+        X, y,
+        train_size=train_size,
+        random_state=RANDOM_STATE,
+        stratify=y_sub
+    )
+    y_train_sub = y_sub[y_train.index]
+
     dataset_summarize = pd.DataFrame(
         [[X_train.shape[1], X_train.shape[0], X_test.shape[0], X.shape[0]]],
         columns=['Num. Features', 'Num. Train Samples',
@@ -54,12 +48,11 @@ def app():
     st.table(dataset_summarize.assign(hack='').set_index('hack'))
 
     st.header('Parameter Setting')
-    k_fold = st.number_input('K-Fold :', 2, 10, 10, step=1)
+    k_fold = st.number_input('K-Fold :', 2, 10, 5, step=1)
 
     col1, col2 = st.beta_columns(2)
     with col1:
         range_C = st.slider("log\u2082C Range:", -5, 15, (0, 10))
-
         pop_size = st.number_input('Population Size :', 1, 100, 30, step=5)
         c_min = st.number_input('c_min :', 1e-05, 1.0,
                                 4e-05, step=1e-05, format="%.5f")
@@ -67,11 +60,10 @@ def app():
         save = st.checkbox('Save Model')
         if save:
             filename = st.text_input('Filename:')
-            filename = selected_dataset + '_GOASVM_' + filename
+            filename = 'GOASVM_' + filename
 
     with col2:
-        range_sigma = st.slider("log\u2082\u03c3 Range: ", -5, 15, (0, 7))
-
+        range_sigma = st.slider("log\u2082\u03c3 Range: ", -5, 15, (0, 10))
         epoch = st.number_input('Maximum Iterations :', 2, 100, 10, step=2)
         c_max = st.number_input('c_max :', 1, 10, 1)
 
@@ -85,7 +77,7 @@ def app():
         bar_progress = st.progress(0.0)
         md = GOA_SVM(k_fold=k_fold, lb=lb, ub=ub, verbose=verbose,
                      pop_size=pop_size, epoch=epoch, c_minmax=c_minmax)
-        best_pos, best_fit = md.train(X_train, y_train, bar_progress)
+        best_pos, best_fit = md.train(X_train, y_train, y_train_sub, bar_progress)
 
         st.write('<hr>', unsafe_allow_html=True)
         st.subheader('Solution :')
@@ -98,8 +90,7 @@ def app():
             columns=['Value']
         )
         st.table(model_solution)
-        st.text(
-            '*Average of Cross Validation (CV) Matthews Correlation Coefficient (MCC).')
+        st.text('*Average of Cross Validation (CV) Matthews Correlation Coefficient (MCC).')
 
         st.write('<hr>', unsafe_allow_html=True)
         st.subheader('Grasshoppers Movement :')

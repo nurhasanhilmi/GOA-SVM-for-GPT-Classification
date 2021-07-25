@@ -1,1 +1,2 @@
 RANDOM_STATE = 42
+DATASET_PATH = 'data/gpt.csv'

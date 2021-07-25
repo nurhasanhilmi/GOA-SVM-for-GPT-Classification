@@ -3,7 +3,7 @@ from copy import deepcopy
 import numpy as np
 import pandas as pd
 from sklearn.metrics import matthews_corrcoef
-from sklearn.model_selection import KFold
+from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.svm import SVC
 
@@ -11,44 +11,30 @@ from .constants import RANDOM_STATE
 
 
 class GOA_SVM:
-    ID_MAX_PROB = -1  # max problem
     ID_POS = 0  # Position
     ID_FIT = 1  # Fitness
+
     EPSILON = 10E-10
     iteration = 0
 
     def __init__(self, k_fold=5, lb=None, ub=None, verbose=True, epoch=10, pop_size=30, c_minmax=(0.00004, 1)):
         self.k_fold = k_fold
         self.verbose = verbose
-        self.__check_parameters__(lb, ub)
+
+        self.problem_size = len(lb)
+        self.lb = np.array(lb)
+        self.ub = np.array(ub)
+
         self.epoch = epoch
         self.pop_size = pop_size
         self.c_minmax = c_minmax
+
         self.samples, self.targets = None, None
         self.solution = None
         self.movement = []
 
-    def __check_parameters__(self, lb, ub):
-        if (lb is None) or (ub is None):
-            print("Lower bound and upper bound are undefined.")
-            exit(0)
-        else:
-            if isinstance(lb, list) and isinstance(ub, list):
-                if len(lb) == len(ub):
-                    if len(lb) == 0:
-                        print("Wrong lower bound and upper bound parameters.")
-                        exit(0)
-                    else:
-                        self.problem_size = len(lb)
-                        self.lb = np.array(lb)
-                        self.ub = np.array(ub)
-                else:
-                    print("Lower bound and Upper bound need to be same length")
-                    exit(0)
-            else:
-                print("Lower bound and Upper bound need to be a list.")
-                exit(0)
-
+        self.scaler = MinMaxScaler(feature_range=(-1,1))
+    
     def init_solution(self, i, progress):
         position = np.random.uniform(self.lb, self.ub)
         fitness = self.get_fitness_position(position=position)
@@ -56,54 +42,47 @@ class GOA_SVM:
         return [position, fitness]
 
     def get_fitness_position(self, position=None, generation=1):
-        kf = KFold(n_splits=self.k_fold, shuffle=True,
-                   random_state=RANDOM_STATE)
-        X = self.samples
-        y = self.targets
+        skf = StratifiedKFold(n_splits=self.k_fold, shuffle=True, random_state=RANDOM_STATE)
+
+        X = np.asarray(self.samples)
+        y = np.asarray(self.targets)
+        y_sub = np.asarray(self.targets_sub)
 
         if self.verbose:
-            print(
-                f'   I_{self.iteration+1}^{generation} Position: {position}')
+            print(f'   I_{self.iteration+1}^{generation} POS: {position}')
 
         scores = []
-        for i, (train_index, test_index) in enumerate(kf.split(X)):
+        for i, (train_index, val_index) in enumerate(skf.split(X, y_sub)):
+            X_train, X_val = X[train_index], X[val_index]
+            y_train, y_val = y[train_index], y[val_index]
 
-            X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-            y_train, y_test = y.iloc[train_index], y.iloc[test_index]
-
-            scaler = MinMaxScaler(feature_range=(-1, 1))
-            scaler.fit(X_train)
-            X_train = scaler.transform(X_train)
-            X_test = scaler.transform(X_test)
+            self.scaler.fit(X_train)
+            X_train = self.scaler.transform(X_train)
+            X_val = self.scaler.transform(X_val)
 
             sigma_value = 2**position[1]
             gamma_value = 1/(2*sigma_value**2)
-
             C_value = 2**position[0]
-            clf = SVC(kernel='rbf', decision_function_shape='ovo',
-                      C=C_value, gamma=gamma_value)
+            clf = SVC(kernel='rbf', decision_function_shape='ovo', C=C_value, gamma=gamma_value)
             clf.fit(X_train, y_train)
-            y_pred = clf.predict(X_test)
+            y_pred = clf.predict(X_val)
 
-            mcc = matthews_corrcoef(y_test, y_pred)
+            mcc = matthews_corrcoef(y_val, y_pred)
             scores.append(mcc)
-            if self.verbose:
-                print(f'\tFold-{i+1} : {mcc}')
+            if self.verbose: print(f'\tFold-{i+1} : {mcc}')
         avg_mcc = np.mean(scores)
-        if self.verbose:
-            print(f'\t   Fitness : {avg_mcc}')
-        self.movement.append(
-            [generation, self.iteration+1, position[0], position[1], avg_mcc])
+        if self.verbose: print(f'\tFIT: {avg_mcc}')
+        self.movement.append([generation, self.iteration+1, position[0], position[1], avg_mcc])
         self.iteration += 1
         return avg_mcc
 
-    def get_global_best_solution(self, pop=None, id_fit=None, id_best=None):
-        sorted_pop = sorted(pop, key=lambda temp: temp[id_fit])
-        return deepcopy(sorted_pop[id_best])
-
-    def update_global_best_solution(self, pop=None, id_best=None, g_best=None):
+    def get_global_best_solution(self, pop=None):
         sorted_pop = sorted(pop, key=lambda temp: temp[self.ID_FIT])
-        current_best = sorted_pop[id_best]
+        return deepcopy(sorted_pop[-1])
+
+    def update_global_best_solution(self, pop=None, g_best=None):
+        sorted_pop = sorted(pop, key=lambda temp: temp[self.ID_FIT])
+        current_best = sorted_pop[-1]
         return deepcopy(current_best) if current_best[self.ID_FIT] > g_best[self.ID_FIT] else deepcopy(g_best)
 
     def amend_position(self, position=None):
@@ -115,15 +94,16 @@ class GOA_SVM:
         l = 1.5
         return f * np.exp(-r / l) - np.exp(-r)
 
-    def train(self, X, y, progress):
+    def train(self, X, y, y_sub, progress):
         self.samples = X
         self.targets = y
+        self.targets_sub = y_sub
+
         if self.verbose:
             print('\n> BEGIN Iteration : 1 (Initialization)')
 
         pop = [self.init_solution(i, progress) for i in range(self.pop_size)]
-        g_best = self.get_global_best_solution(
-            pop=pop, id_fit=self.ID_FIT, id_best=self.ID_MAX_PROB)
+        g_best = self.get_global_best_solution(pop=pop)
 
         if self.verbose:
             print("> END Iteration: 1 (Initialization), Best fit: {}, Best pos: {}".format(
@@ -172,8 +152,7 @@ class GOA_SVM:
                                   (self.epoch*self.pop_size))
 
             # UPDATE T IF THERE IS A BETTER SOLUTION
-            g_best = self.update_global_best_solution(
-                pop, self.ID_MAX_PROB, g_best)
+            g_best = self.update_global_best_solution(pop, g_best)
 
             if self.verbose:
                 print("> END Iteration: {}, Best fit: {}, Best pos: {}".format(
@@ -181,23 +160,24 @@ class GOA_SVM:
             self.iteration = 0
 
         self.solution = g_best
-        self.__fit()
+        self.fit()
         return g_best[self.ID_POS], g_best[self.ID_FIT]
 
-    def __fit(self):
+    def fit(self):
         param = self.solution[self.ID_POS]
+
+        C_value = 2**param[0]
         sigma_value = 2**param[1]
         gamma_value = 1/(2*sigma_value**2)
-        C_value = 2**param[0]
-        self.model = SVC(
-            kernel='rbf', decision_function_shape='ovo', C=C_value, gamma=gamma_value)
-        self.min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
-        self.min_max_scaler.fit(self.samples)
-        X_train = self.min_max_scaler.transform(self.samples)
+
+        self.model = SVC(kernel='rbf', decision_function_shape='ovo', C=C_value, gamma=gamma_value)
+
+        self.scaler.fit(self.samples)
+        X_train = self.scaler.transform(self.samples)
         self.model.fit(X_train, self.targets)
 
     def predict(self, X_test, y_test=None):
-        X = self.min_max_scaler.transform(X_test)
+        X = self.scaler.transform(X_test)
         y_pred = self.model.predict(X)
         if y_test is not None:
             self.test_samples = pd.DataFrame(X_test)
@@ -210,4 +190,3 @@ class GOA_SVM:
         df_movement = pd.DataFrame(self.movement, columns=columns)
         name = './data/misc/'+filename+'.csv'
         df_movement.to_csv(name, index=False)
-

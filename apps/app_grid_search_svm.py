@@ -7,11 +7,11 @@ import plotly.express as px
 import seaborn as sns
 import streamlit as st
 from sklearn.metrics import confusion_matrix, matthews_corrcoef
-from sklearn.model_selection import KFold, train_test_split
+from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.svm import SVC
 
-from .constants import RANDOM_STATE
+from .constants import RANDOM_STATE, DATASET_PATH
 
 
 class GridSearchSVM:
@@ -34,32 +34,29 @@ def app():
     st.title('Grid Search-SVM')
 
     st.header('Dataset Setting')
-    col1, col2, col3 = st.beta_columns(3)
+    col1, col2 = st.beta_columns(2)
     with col1:
-        selected_dataset = st.selectbox(
-            'Select Dataset:', ['GPT Complete', 'GPT Split'])
+        sampling_size = st.number_input('Sampling Size (%):', 5, 100, 100, 5)
     with col2:
-        train_size = st.number_input('Train Size (%):', 60, 90, 90, step=5)
-    with col3:
-        sampling_size = st.number_input(
-            'Sampling Size (%):', 5, 100, 100, step=5)
+        train_size = st.number_input('Train Size (%):', 60, 90, 90, 5)
+
+    df = pd.read_csv(DATASET_PATH)
+    if sampling_size != 100:
+        sampling_size = sampling_size/100
+        df = df.sample(frac=sampling_size, random_state=RANDOM_STATE)
+    X = df.iloc[:, :156]
+    y = df['technique']
+    y_sub = df['subtechnique']
 
     train_size = train_size/100
-    sampling_size = sampling_size/100
-
-    if selected_dataset == 'GPT Complete':
-        df = pd.read_csv('data/gpt.csv')
-        df = df.sample(frac=sampling_size, random_state=RANDOM_STATE)
-        X = df.iloc[:, :273]
-        y = df['technique']
-    elif selected_dataset == 'GPT Split':
-        df = pd.read_csv('data/gpt_split.csv')
-        df = df.sample(frac=sampling_size, random_state=RANDOM_STATE)
-        X = df.iloc[:, :273]
-        y = df['technique']
-
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, train_size=train_size, random_state=RANDOM_STATE)
+        X, y,
+        train_size=train_size,
+        random_state=RANDOM_STATE,
+        stratify=y_sub
+    )
+    y_train_sub = y_sub[y_train.index]
+
     dataset_summarize = pd.DataFrame(
         [[X_train.shape[1], X_train.shape[0], X_test.shape[0], X.shape[0]]],
         columns=['Num. Features', 'Num. Train Samples',
@@ -75,12 +72,12 @@ def app():
 
     col1, col2 = st.beta_columns(2)
     with col1:
-        range_C = st.slider("log\u2082C Set:", -5, 15, (0, 10))
+        range_C = st.slider("log\u2082C Interval:", -5, 15, (0, 10))
 
     with col2:
-        range_sigma = st.slider("log\u2082\u03c3 Set:", -5, 15, (0, 7))
+        range_sigma = st.slider("log\u2082\u03c3 Interval:", -5, 15, (0, 10))
 
-    step_size = st.number_input('Step Size:', 0.1, 1.0, 0.5, 0.05)
+    step_size = st.number_input('Step Size:', 0.1, 1.0, 1.0, 0.05)
     for c in np.round(np.arange(range_C[0], range_C[1]+0.001, step_size), decimals=2):
         C.append(2**c)
         C_header.append(f'2^{c}')
@@ -94,7 +91,7 @@ def app():
         C_df = C_df.transpose()
         C_df.columns = C_header
         C_df.index = ['value']
-        st.write('C Set:')
+        st.write('C Set:', C_df.shape[1])
         st.dataframe(C_df)
     with col4:
         sigma_df = pd.DataFrame(sigma)
@@ -107,20 +104,21 @@ def app():
     lb = (range_C[0], range_sigma[0])
     ub = (range_C[1], range_sigma[1])
 
-    k_fold = st.number_input('K-Fold :', 2, 10, 10, step=1)
+    k_fold = st.number_input('K-Fold :', 2, 10, 5, step=1)
     verbose = st.checkbox('Show Backend Output (Verbose)', value=True)
     save = st.checkbox('Save Model')
     if save:
         filename = st.text_input('Filename:')
-        filename = selected_dataset + '_GridSearchSVM_' + filename
+        filename = 'GridSearchSVM_' + filename
 
     if st.button('Train & Test'):
         st.write('**Start The Training Process**')
         bar_progress = st.progress(0.0)
 
-        kf = KFold(n_splits=k_fold, shuffle=True, random_state=RANDOM_STATE)
-        X = X_train
-        y = y_train
+        skf = StratifiedKFold(n_splits=k_fold, shuffle=True, random_state=RANDOM_STATE)
+        X = np.asarray(X_train)
+        y = np.asarray(y_train)
+        ysub = np.asarray(y_train_sub)
 
         best_score = 0
         best_sigma = None
@@ -132,35 +130,33 @@ def app():
                 if verbose:
                     print(f'C: {c}, Sigma: {g}')
                 scores = []
-                for k, (train_index, test_index) in enumerate(kf.split(X)):
-
-                    X_trn, X_tst = X.iloc[train_index], X.iloc[test_index]
-                    y_trn, y_tst = y.iloc[train_index], y.iloc[test_index]
+                for k, (train_index, val_index) in enumerate(skf.split(X, ysub)):
+                    X_trn, X_val = X[train_index], X[val_index]
+                    y_trn, y_val = y[train_index], y[val_index]
 
                     scaler = MinMaxScaler(feature_range=(-1, 1))
                     scaler.fit(X_trn)
                     X_trn = scaler.transform(X_trn)
-                    X_tst = scaler.transform(X_tst)
+                    X_val = scaler.transform(X_val)
 
                     gamma_value = 1/(2*g**2)
                     clf = SVC(kernel='rbf',
                               decision_function_shape='ovo', C=c, gamma=gamma_value)
                     clf.fit(X_trn, y_trn)
-                    y_pred = clf.predict(X_tst)
+                    y_pred = clf.predict(X_val)
 
-                    mcc = matthews_corrcoef(y_tst, y_pred)
+                    mcc = matthews_corrcoef(y_val, y_pred)
                     scores.append(mcc)
                     if verbose:
                         print(f'\tFold-{k+1} : {mcc}')
                 avg_mcc = np.mean(scores)
-                pop[iter_progress] = ['%.1f' %
-                                      np.log2(c), '%.1f' % np.log2(g), avg_mcc]
+                pop[iter_progress] = ['%.2f' % np.log2(c), '%.2f' % np.log2(g), avg_mcc]
                 if avg_mcc > best_score:
                     best_score = avg_mcc
                     best_sigma = g
                     best_C = c
                 if verbose:
-                    print('   Fitness:', avg_mcc)
+                    print('\tFIT: ', avg_mcc)
                 iter_progress += 1
                 bar_progress.progress(iter_progress/(len(C)*len(sigma)))
 
@@ -178,8 +174,8 @@ def app():
                 f'Best Parameter (C, Sigma) : ({best_C}, {best_sigma}). Fitness: {best_score}')
 
         st.subheader('Solution :')
-        solution_C = f'{best_C:.4f} ({np.log2(best_C):.1f})'
-        solution_sigma = f'{best_sigma:.4f} ({np.log2(best_sigma):.1f})'
+        solution_C = f'{best_C:.4f} ({np.log2(best_C):.4f})'
+        solution_sigma = f'{best_sigma:.4f} ({np.log2(best_sigma):.4f})'
         model_solution = pd.DataFrame(
             [solution_C, solution_sigma, "{0:.4f}".format(best_score)],
             index=['Best C (log\u2082C)', 'Best \u03c3 (log\u2082\u03c3)',

@@ -25,8 +25,8 @@ def app():
     filename = st.selectbox('Select Model:', list(dict.fromkeys(list_file)))
 
     if filename:
-        used_dataset = filename.split('_')[0]
-        optimizer = filename.split('_')[1]
+        # used_dataset = filename.split('_')[0]
+        optimizer = filename.split('_')[0]
         movement = pd.read_csv(path+filename+'.csv')
         model = open(path+filename+'.sav', 'rb')
         model = pickle.load(model)
@@ -44,15 +44,15 @@ def app():
             sigma_range = (model.lb[1], model.ub[1])
             if optimizer == 'GOASVM':
                 model_parameter = pd.DataFrame(
-                    [k_fold, pop_size, epoch, c_minmax, c_range, sigma_range],
+                    [k_fold, pop_size, epoch, c_minmax, list(c_range), list(sigma_range)],
                     index=['K-Fold', 'Pop. Size', 'Maximum Iteration',
                            'c_minmax', 'log\u2082C Range', 'log\u2082\u03c3 Range'],
                     columns=['Value']
                 )
             elif optimizer == 'GridSearchSVM':
                 model_parameter = pd.DataFrame(
-                    [k_fold, f'[{c_range[0]},...,{c_range[1]}]',
-                        f'[{sigma_range[0]},...,{sigma_range[1]}]', model.step_size],
+                    [k_fold, f'[{c_range[0]}, {c_range[1]}]',
+                        f'[{sigma_range[0]}, {sigma_range[1]}]', model.step_size],
                     index=['K-Fold', 'log\u2082C Set',
                            'log\u2082\u03c3 Set', 'Step'],
                     columns=['Value']
@@ -63,15 +63,15 @@ def app():
             best_pos = model.solution[0]
             best_fit = model.solution[1]
             if optimizer == 'GOASVM':
-                best_C = f'{2**best_pos[0]:.4f} ({best_pos[0]:.4f})'
-                best_sigma = f'{2**best_pos[1]:.4f} ({best_pos[1]:.4f})'
+                best_C = f'{2**best_pos[0]:.2f} ({best_pos[0]:.2f})'
+                best_sigma = f'{2**best_pos[1]:.2f} ({best_pos[1]:.2f})'
             elif optimizer == 'GridSearchSVM':
-                best_C = f'{best_pos[0]:.4f} ({np.log2(best_pos[0])})'
-                best_sigma = f'{best_pos[1]:.4f} ({np.log2(best_pos[1])})'
+                best_C = f'{best_pos[0]:.2f} ({np.log2(best_pos[0])})'
+                best_sigma = f'{best_pos[1]:.2f} ({np.log2(best_pos[1])})'
             indeks = ['Best C (log\u2082C)',
                       'Best \u03c3 (log\u2082\u03c3)', 'Fitness*']
             model_solution = pd.DataFrame(
-                [best_C, best_sigma, "{0:.4f}".format(best_fit)],
+                [best_C, best_sigma, "{0:.2%}".format(best_fit)],
                 index=indeks,
                 columns=['Value']
             )
@@ -149,13 +149,13 @@ def app():
             train_sample.shape[0]/(train_sample.shape[0]+test_sample.shape[0])*100)
         n_test = 100 - n_train
 
-        st.header(f'Train Samples ({used_dataset})')
+        st.header(f'Training Sets')
         st.write(
             f'`{train_sample.shape[0]}` samples | `{n_train:.0f}%` of total data. ')
         st.dataframe(train_sample.sample(frac=frac, random_state=RANDOM_STATE))
         st.text(f'Table above showing only {int(frac*100)}% of train samples.')
 
-        st.header(f'Test Samples + Prediction ({used_dataset})')
+        st.header(f'Testing Set + Prediction')
         st.write(
             f'`{test_sample.shape[0]}` samples | `{n_test:.0f}%` of total data')
         st.dataframe(test_sample.sample(frac=frac, random_state=RANDOM_STATE))
@@ -178,12 +178,15 @@ def app():
         plt.xlabel("Predicted", fontweight='bold')
         st.pyplot(fig)
 
-        clf_report = classification_report(
-            test_sample['target'], test_sample['prediction'])
-        print(clf_report)
         mcc = matthews_corrcoef(
             test_sample['target'], test_sample['prediction'])
-        st.subheader(f'MCC: `{mcc:.4f}`')
+        st.subheader(f'MCC: `{mcc:.2%}`')
+
+        clf_report = classification_report(
+            test_sample['target'], test_sample['prediction'], digits=4)
+        print(filename, np.log2(model.solution[0]))
+        print('MCC: ', mcc)
+        print(clf_report)
     else:
         st.markdown(
             '<span style="color:red">No model has been saved yet.</span>', True)
