@@ -184,7 +184,10 @@ def app():
 
         clf_report = classification_report(
             test_sample['target'], test_sample['prediction'], digits=4)
-        print(filename, np.log2(model.solution[0]))
+        if optimizer == 'GOASVM':
+            print(filename, model.solution[0])
+        elif optimizer == 'GridSearchSVM':
+            print(filename, np.log2(model.solution[0]))
         print('MCC: ', mcc)
         print(clf_report)
     else:

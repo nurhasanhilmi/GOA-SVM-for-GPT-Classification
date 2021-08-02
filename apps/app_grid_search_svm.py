@@ -38,13 +38,13 @@ def app():
     with col1:
         sampling_size = st.number_input('Sampling Size (%):', 5, 100, 100, 5)
     with col2:
-        train_size = st.number_input('Train Size (%):', 60, 90, 90, 5)
+        train_size = st.number_input('Train Size (%):', 60, 90, 80, 5)
 
     df = pd.read_csv(DATASET_PATH)
     if sampling_size != 100:
         sampling_size = sampling_size/100
         df = df.sample(frac=sampling_size, random_state=RANDOM_STATE)
-    X = df.iloc[:, :156]
+    X = df.iloc[:, :195]
     y = df['technique']
     y_sub = df['subtechnique']
 
@@ -72,12 +72,12 @@ def app():
 
     col1, col2 = st.beta_columns(2)
     with col1:
-        range_C = st.slider("log\u2082C Interval:", -5, 15, (0, 10))
+        range_C = st.slider("log\u2082C Interval:", -5, 15, (0, 7))
 
     with col2:
-        range_sigma = st.slider("log\u2082\u03c3 Interval:", -5, 15, (0, 10))
+        range_sigma = st.slider("log\u2082\u03c3 Interval:", -5, 15, (0, 5))
 
-    step_size = st.number_input('Step Size:', 0.1, 1.0, 1.0, 0.05)
+    step_size = st.number_input('Step Size:', 0.1, 1.0, 0.5, 0.05)
     for c in np.round(np.arange(range_C[0], range_C[1]+0.001, step_size), decimals=2):
         C.append(2**c)
         C_header.append(f'2^{c}')
