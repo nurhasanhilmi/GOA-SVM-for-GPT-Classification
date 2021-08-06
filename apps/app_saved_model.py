@@ -181,15 +181,6 @@ def app():
         mcc = matthews_corrcoef(
             test_sample['target'], test_sample['prediction'])
         st.subheader(f'MCC: `{mcc:.2%}`')
-
-        clf_report = classification_report(
-            test_sample['target'], test_sample['prediction'], digits=4)
-        if optimizer == 'GOASVM':
-            print(filename, model.solution[0])
-        elif optimizer == 'GridSearchSVM':
-            print(filename, np.log2(model.solution[0]))
-        print('MCC: ', mcc)
-        print(clf_report)
     else:
         st.markdown(
             '<span style="color:red">No model has been saved yet.</span>', True)

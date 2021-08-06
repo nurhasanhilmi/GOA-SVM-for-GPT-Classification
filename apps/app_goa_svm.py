@@ -52,7 +52,7 @@ def app():
 
     col1, col2 = st.beta_columns(2)
     with col1:
-        range_C = st.slider("log\u2082C Range:", -5, 15, (0, 7))
+        range_C = st.slider("log\u2082C Range:", -5, 10, (0, 5))
         pop_size = st.number_input('Population Size :', 1, 100, 30, step=5)
         c_min = st.number_input('c_min :', 1e-05, 1.0,
                                 4e-05, step=1e-05, format="%.5f")
@@ -63,7 +63,7 @@ def app():
             filename = 'GOASVM_' + filename
 
     with col2:
-        range_sigma = st.slider("log\u2082\u03c3 Range: ", -5, 15, (0, 5))
+        range_sigma = st.slider("log\u2082\u03c3 Range: ", -5, 10, (0, 5))
         epoch = st.number_input('Maximum Iterations :', 2, 100, 10, step=2)
         c_max = st.number_input('c_max :', 1, 10, 1)
 

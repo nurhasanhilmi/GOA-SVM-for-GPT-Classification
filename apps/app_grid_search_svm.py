@@ -72,12 +72,12 @@ def app():
 
     col1, col2 = st.beta_columns(2)
     with col1:
-        range_C = st.slider("log\u2082C Interval:", -5, 15, (0, 7))
+        range_C = st.slider("log\u2082C Interval:", -5, 10, (0, 5))
 
     with col2:
-        range_sigma = st.slider("log\u2082\u03c3 Interval:", -5, 15, (0, 5))
+        range_sigma = st.slider("log\u2082\u03c3 Interval:", -5, 10, (0, 5))
 
-    step_size = st.number_input('Step Size:', 0.1, 1.0, 0.5, 0.05)
+    step_size = st.number_input('Step Size:', 0.1, 1.0, 0.2, 0.05)
     for c in np.round(np.arange(range_C[0], range_C[1]+0.001, step_size), decimals=2):
         C.append(2**c)
         C_header.append(f'2^{c}')
