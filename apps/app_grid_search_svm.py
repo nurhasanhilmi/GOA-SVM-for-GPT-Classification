@@ -91,7 +91,7 @@ def app():
         C_df = C_df.transpose()
         C_df.columns = C_header
         C_df.index = ['value']
-        st.write('C Set:', C_df.shape[1])
+        st.write('C Set')
         st.dataframe(C_df)
     with col4:
         sigma_df = pd.DataFrame(sigma)

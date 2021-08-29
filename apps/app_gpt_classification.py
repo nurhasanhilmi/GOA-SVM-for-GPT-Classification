@@ -27,7 +27,7 @@ def app():
     model_name = st.selectbox('Select Model:', list(dict.fromkeys(list_file)))
 
     if model_name:
-        optimizer = model_name.split('_')[1]
+        optimizer = model_name.split('_')[0]
 
         model = open(path+model_name+'.sav', 'rb')
         model = pickle.load(model)
@@ -43,11 +43,12 @@ def app():
             test_sample['target'] = model.y_test
             test_sample['prediction'] = model.y_pred
 
-        dataset = model_name.split('_')[0]
-        if dataset == "GPT Split":
-            data_path = "./data/gpt_split.csv"
-        elif dataset == "GPT Complete":
-            data_path = './data/gpt.csv'
+        # dataset = model_name.split('_')[0]
+        # if dataset == "GPT Split":
+        #     data_path = "./data/gpt_split.csv"
+        # elif dataset == "GPT Complete":
+        #     data_path = './data/gpt.csv'
+        data_path = './data/gpt.csv'
 
         data = pd.read_csv(data_path)
         n_train = np.ceil(
@@ -56,28 +57,28 @@ def app():
             (train_sample.shape[0]+test_sample.shape[0])/data.shape[0]*100.0)
         data = data.sample(frac=n_frac/100.0, random_state=RANDOM_STATE)
 
-        audio_path = data['file_path']
+        audio_path = data['audio_path']
         y = data['technique']
 
         _, X_test, _, y_test = train_test_split(
             audio_path, y, train_size=n_train/100.0, random_state=RANDOM_STATE)
         data_test = pd.DataFrame(X_test)
         # data_test['technique'] = y_test
-        data_test = data_test.sort_values('file_path')
+        data_test = data_test.sort_values('audio_path')
         # st.dataframe(data_test)
 # 2
         st.header('Select GPT Audio File')
         selected_audio = st.selectbox(
-            "Select GPT Audio:", list(data_test['file_path']))
+            "Select GPT Audio:", list(data_test['audio_path']))
         selected_audio_path = selected_audio[1:]
-        technique = selected_audio.split('/')[4].split('_')[0]
+        technique = selected_audio.split('/')[5].split('_')[0]
         audio_file = open(selected_audio_path, 'rb')
         audio_samples = audio_file.read()
         st.audio(audio_samples)
         st.write(f'Technique *(Target Class)*: `{technique}`')
 # 3
         st.header('Feature Extraction')
-        signal, sr = librosa.load(selected_audio_path)
+        signal, sr = librosa.load(selected_audio_path, duration=4.0)
 
 # MFCC, Delta MFCC, Delta2 MFCC
         st.subheader('Audio Descriptors')
@@ -109,27 +110,21 @@ def app():
         mfccs = np.hstack((
             np.mean(mfcc, axis=1),
             np.std(mfcc, axis=1),
-            np.max(mfcc, axis=1),
-            np.median(mfcc, axis=1),
-            np.min(mfcc, axis=1),
+            np.var(mfcc, axis=1),
             skew(mfcc, axis=1),
             kurtosis(mfcc, axis=1)
         ))
         delta_mfccs = np.hstack((
             np.mean(delta_mfcc, axis=1),
             np.std(delta_mfcc, axis=1),
-            np.max(delta_mfcc, axis=1),
-            np.median(delta_mfcc, axis=1),
-            np.min(delta_mfcc, axis=1),
+            np.var(delta_mfcc, axis=1),
             skew(delta_mfcc, axis=1),
             kurtosis(delta_mfcc, axis=1)
         ))
         delta2_mfccs = np.hstack((
             np.mean(delta2_mfcc, axis=1),
             np.std(delta2_mfcc, axis=1),
-            np.max(delta2_mfcc, axis=1),
-            np.median(delta2_mfcc, axis=1),
-            np.min(delta2_mfcc, axis=1),
+            np.var(delta2_mfcc, axis=1),
             skew(delta2_mfcc, axis=1),
             kurtosis(delta2_mfcc, axis=1)
         ))
@@ -137,7 +132,7 @@ def app():
         extracted_features = np.hstack((mfccs, delta_mfccs, delta2_mfccs))
         columns = []
         names = ['mfcc', 'delta_mfcc', 'delta2_mfcc']
-        stats = ['mean', 'std', 'max', 'median', 'min', 'skew', 'kurtosis']
+        stats = ['mean', 'std', 'var', 'skew', 'kurtosis']
 
         for name in names:
             for stat in stats:
@@ -149,7 +144,11 @@ def app():
         st.dataframe(df)
 # Scaling
         st.subheader('Normalized Feature Vector')
-        df_scaled = model.min_max_scaler.transform(df)
+
+        if optimizer == 'GOASVM':
+            df_scaled = model.scaler.transform(df)
+        elif optimizer == 'GridSearchSVM':
+            df_scaled = model.min_max_scaler.transform(df)
         st.dataframe(df_scaled)
 
         if st.button('Classify / Predict'):

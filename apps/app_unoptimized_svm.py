@@ -82,4 +82,4 @@ def app():
         st.pyplot(fig)
 
         mcc = matthews_corrcoef(y_test, y_pred)
-        st.subheader(f'MCC: `{mcc:.4f}`')
+        st.subheader(f'MCC: `{mcc:.2%}`')
